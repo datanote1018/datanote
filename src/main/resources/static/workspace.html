@@ -5281,11 +5281,18 @@ function switchTab(tabEl) {
 function refreshRightPanelIfOpen() {
   var panel = document.getElementById('rightPanel');
   if (!panel || !panel.classList.contains('open')) return;
+
+  // 从 activeTab 和全局变量取当前任务 ID（全局变量优先，因为 open 函数第一行就设了）
+  var activeTab = document.querySelector('.editor-tab.active');
+  var scriptId = currentScriptId || (activeTab && activeTab.dataset.scriptId ? parseInt(activeTab.dataset.scriptId) : null);
+  var syncTaskId = currentSyncTaskId || (activeTab && activeTab.dataset.syncTaskId ? parseInt(activeTab.dataset.syncTaskId) : null);
+  var tabType = activeTab ? activeTab.dataset.type : null;
+
   if (currentRightTab === 0) {
-    // 基本信息：重新加载主题域下拉 + 回填脚本属性
+    // 基本信息
     loadPropSubjects();
-    if (currentScriptId) {
-      api('/api/script/' + currentScriptId).then(function(res) {
+    if (scriptId && tabType === 'sql') {
+      api('/api/script/' + scriptId).then(function(res) {
         if (res.code === 0 && res.data) {
           var s = res.data;
           if (document.getElementById('propTaskType')) document.getElementById('propTaskType').value = s.taskType || '';
@@ -5300,14 +5307,18 @@ function refreshRightPanelIfOpen() {
       });
     }
   } else if (currentRightTab === 1) {
-    if (currentScriptId) loadSchedConfig(currentScriptId);
-    else if (currentSyncTaskId) loadSyncSchedConfig(currentSyncTaskId);
+    // 调度配置
+    if (tabType === 'sql' && scriptId) loadSchedConfig(scriptId);
+    else if (tabType === 'sync' && syncTaskId) loadSyncSchedConfig(syncTaskId);
   } else if (currentRightTab === 2) {
-    if (currentScriptId) loadDependencies();
+    // 依赖关系
+    if (scriptId) loadDependencies();
   } else if (currentRightTab === 3) {
+    // 运行日志
     loadDsLogs();
   } else if (currentRightTab === 4) {
-    if (currentScriptId) loadScriptVersions(currentScriptId);
+    // 历史版本
+    if (scriptId) loadScriptVersions(scriptId);
   }
 }
 
