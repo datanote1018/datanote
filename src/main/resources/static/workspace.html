@@ -3840,6 +3840,12 @@ html, body {
             <span class="prop-label">模型描述 <span style="color:var(--error);">*</span></span>
             <div class="prop-value"><textarea class="prop-textarea" id="propModelDesc" placeholder="请描述该模型的业务含义和数据口径（上线必填）" rows="3"></textarea></div>
           </div>
+          <div class="prop-row" style="margin-top:12px;">
+            <span class="prop-label"></span>
+            <div class="prop-value">
+              <button class="btn btn-primary btn-sm" onclick="saveBasicInfo()" style="font-size:12px;">保存基本信息</button>
+            </div>
+          </div>
         </div>
         <!-- 隐藏字段兼容 -->
         <input type="hidden" id="propDatabaseName">
@@ -3981,6 +3987,9 @@ html, body {
               <div style="font-size:11px;color:var(--text-muted);margin-top:2px;" id="alertContactHint">群组机器人的 Webhook URL</div>
             </div>
           </div>
+        </div>
+        <div style="margin-top:12px;padding:0 12px;">
+          <button class="btn btn-primary btn-sm" onclick="schedSaveConfig()" style="font-size:12px;">保存调度配置</button>
         </div>
       </div>
 
@@ -5730,10 +5739,7 @@ function toggleRightTab(idx) {
     return;
   }
 
-  // 离开当前 tab 时自动保存
-  if (currentRightTab !== idx) {
-    autoSaveCurrentTab();
-  }
+  // 切换 tab 时不自动保存，需手动点保存按钮
 
   if (currentRightTab === idx && panel.classList.contains('open')) {
     // 再次点击同一个 tab，关闭面板
@@ -5770,7 +5776,7 @@ function toggleRightTab(idx) {
 }
 
 function closeRightPanel() {
-  autoSaveCurrentTab();
+  // 关闭面板不自动保存，需手动点保存按钮
   var panel = document.getElementById('rightPanel');
   panel.classList.remove('open');
   currentRightTab = -1;
@@ -7692,8 +7698,8 @@ function autoSaveCurrentTab() {
   else if (currentRightTab === 1) schedAutoSave();
 }
 
-function saveBasicInfoSilent() {
-  if (!currentScriptId) return;
+function saveBasicInfo() {
+  if (!currentScriptId) { msgBox('请先选择一个脚本'); return; }
   var payload = {};
   var propTaskType = document.getElementById('propTaskType');
   var propModelDesc = document.getElementById('propModelDesc');
@@ -7703,11 +7709,12 @@ function saveBasicInfoSilent() {
   if (propSubject && propSubject.selectedIndex > 0) {
     payload.subject = propSubject.options[propSubject.selectedIndex].text;
   }
-  // 用轻量接口，不创建版本
   fetch('/api/script/' + currentScriptId + '/basic-info', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
+  }).then(function(r) { return r.json(); }).then(function(res) {
+    msgBox(res.code === 0 ? '基本信息已保存' : '保存失败');
   });
 }
 
