@@ -1,0 +1,18 @@
+-- 分组表
+CREATE TABLE IF NOT EXISTS dn_group (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  group_name VARCHAR(64) NOT NULL COMMENT '分组名称',
+  description VARCHAR(256) DEFAULT NULL COMMENT '分组描述',
+  admin_user VARCHAR(64) NOT NULL COMMENT '管理员',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='告警分组';
+
+-- 分组成员表
+CREATE TABLE IF NOT EXISTS dn_group_member (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  group_id BIGINT NOT NULL COMMENT '分组ID',
+  username VARCHAR(64) NOT NULL COMMENT '用户名',
+  role VARCHAR(16) DEFAULT 'member' COMMENT '角色(admin/member)',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_group_user (group_id, username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='分组成员';

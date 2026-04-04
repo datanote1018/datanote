@@ -1,0 +1,213 @@
+# ============================================================
+# DataNote 完整体验环境
+# 包含：MySQL + Hadoop(HDFS + YARN) + Hive + DataNote
+# 服务：8 个容器（MySQL/NameNode/DataNode/ResourceManager/
+#       NodeManager/HiveMetastore/HiveServer2/DataNote）
+# 启动：docker-compose up -d
+# 访问：http://localhost:8099
+# YARN：http://localhost:8088
+# HDFS：http://localhost:9870
+# 资源：建议 10GB+ 内存、4 核 CPU
+# ============================================================
+
+services:
+
+  # ===== MySQL（元数据库 + 示例业务库）=====
+  mysql:
+    image: mysql:8.0
+    platform: linux/amd64
+    container_name: datanote-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: datanote123
+      MYSQL_DATABASE: datanote
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./sql/init-all.sql:/docker-entrypoint-initdb.d/01_init.sql
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --character-set-client-handshake=FALSE
+      --init-connect='SET NAMES utf8mb4'
+      --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ===== Hadoop NameNode =====
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    platform: linux/amd64
+    container_name: datanote-namenode
+    environment:
+      CLUSTER_NAME: datanote
+      CORE_CONF_fs_defaultFS: hdfs://namenode:9000
+      HDFS_CONF_dfs_replication: 1
+      HDFS_CONF_dfs_permissions_enabled: "false"
+    ports:
+      - "9870:9870"
+    volumes:
+      - namenode_data:/hadoop/dfs/name
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9870/ || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # ===== Hadoop DataNode =====
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    platform: linux/amd64
+    container_name: datanote-datanode
+    environment:
+      CORE_CONF_fs_defaultFS: hdfs://namenode:9000
+      HDFS_CONF_dfs_replication: 1
+    volumes:
+      - datanode_data:/hadoop/dfs/data
+    depends_on:
+      namenode:
+        condition: service_healthy
+
+  # ===== YARN ResourceManager =====
+  resourcemanager:
+    image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.2.1-java8
+    platform: linux/amd64
+    container_name: datanote-resourcemanager
+    environment:
+      CORE_CONF_fs_defaultFS: hdfs://namenode:9000
+      YARN_CONF_yarn_resourcemanager_hostname: resourcemanager
+      YARN_CONF_yarn_nodemanager_aux___services: mapreduce_shuffle
+      YARN_CONF_yarn_scheduler_minimum___allocation___mb: 128
+      YARN_CONF_yarn_scheduler_maximum___allocation___mb: 2048
+      YARN_CONF_yarn_nodemanager_resource_memory___mb: 2048
+    ports:
+      - "8088:8088"
+    depends_on:
+      namenode:
+        condition: service_healthy
+
+  # ===== YARN NodeManager =====
+  nodemanager:
+    image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
+    platform: linux/amd64
+    container_name: datanote-nodemanager
+    environment:
+      CORE_CONF_fs_defaultFS: hdfs://namenode:9000
+      YARN_CONF_yarn_resourcemanager_hostname: resourcemanager
+      YARN_CONF_yarn_nodemanager_aux___services: mapreduce_shuffle
+      YARN_CONF_yarn_nodemanager_resource_memory___mb: 2048
+      YARN_CONF_yarn_nodemanager_resource_cpu___vcores: 2
+    depends_on:
+      - resourcemanager
+
+  # ===== Hive Metastore =====
+  hive-metastore:
+    image: apache/hive:3.1.3
+    platform: linux/amd64
+    container_name: datanote-hive-metastore
+    volumes:
+      - ./docker/mysql-connector-j-8.0.33.jar:/opt/hive/lib/mysql-connector-j-8.0.33.jar
+      - ./docker/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+    environment:
+      SERVICE_NAME: metastore
+      DB_DRIVER: mysql
+      SERVICE_OPTS: >-
+        -Djavax.jdo.option.ConnectionURL=jdbc:mysql://mysql:3306/hive_metastore?createDatabaseIfNotExist=true&useSSL=false
+        -Djavax.jdo.option.ConnectionDriverName=com.mysql.cj.jdbc.Driver
+        -Djavax.jdo.option.ConnectionUserName=root
+        -Djavax.jdo.option.ConnectionPassword=datanote123
+    depends_on:
+      mysql:
+        condition: service_healthy
+      namenode:
+        condition: service_healthy
+
+  # ===== HiveServer2 =====
+  hive-server:
+    image: apache/hive:3.1.3
+    platform: linux/amd64
+    container_name: datanote-hive-server
+    volumes:
+      - ./docker/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+    environment:
+      SERVICE_NAME: hiveserver2
+      HIVE_SERVER2_THRIFT_PORT: 10000
+      IS_RESUME: "true"
+      SERVICE_OPTS: >-
+        -Dhive.metastore.uris=thrift://hive-metastore:9083
+        -Dhive.server2.authentication=NOSASL
+        -Dhive.server2.thrift.bind.host=0.0.0.0
+        -Dfs.defaultFS=hdfs://namenode:9000
+        -Dhive.execution.engine=mr
+        -Dmapreduce.framework.name=yarn
+        -Dyarn.resourcemanager.hostname=resourcemanager
+    ports:
+      - "10000:10000"
+    depends_on:
+      - hive-metastore
+      - resourcemanager
+    healthcheck:
+      test: ["CMD-SHELL", "beeline -u 'jdbc:hive2://localhost:10000/default;auth=noSasl' -e 'SELECT 1;' 2>/dev/null || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 10
+      start_period: 60s
+
+  # ===== HDFS 初始化（建目录）=====
+  hdfs-init:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    platform: linux/amd64
+    container_name: datanote-hdfs-init
+    entrypoint: >
+      /bin/sh -c "
+        echo 'Waiting for HDFS to be ready...' &&
+        sleep 10 &&
+        hdfs dfs -fs hdfs://namenode:9000 -mkdir -p /user/hive/warehouse &&
+        hdfs dfs -fs hdfs://namenode:9000 -chmod -R 777 /user/hive/warehouse &&
+        hdfs dfs -fs hdfs://namenode:9000 -mkdir -p /tmp &&
+        hdfs dfs -fs hdfs://namenode:9000 -chmod -R 777 /tmp &&
+        echo 'HDFS init done'
+      "
+    restart: on-failure
+    depends_on:
+      namenode:
+        condition: service_healthy
+
+  # ===== DataNote 应用 =====
+  datanote:
+    build: .
+    container_name: datanote-app
+    ports:
+      - "8099:8099"
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USERNAME: root
+      DB_PASSWORD: datanote123
+      HIVE_URL: "jdbc:hive2://hive-server:10000/default;auth=noSasl"
+      HIVE_DEFAULT_FS: hdfs://namenode:9000
+      HADOOP_HOME: /opt/hadoop
+      DATAX_HOME: /opt/datax
+      JAVA_OPTS: "-Xms512m -Xmx1g"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8099/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  mysql_data:
+  namenode_data:
+  datanode_data:
+
+networks:
+  default:
+    name: datanote-net

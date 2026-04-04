@@ -1,0 +1,52 @@
+# ============================================================
+# DataNote 轻量体验环境（无需 Hadoop/Hive）
+# 包含：MySQL + DataNote
+# 启动：docker-compose -f docker-compose-lite.yml up -d
+# 访问：http://localhost:8099
+# 资源：1GB 内存即可
+# 说明：Hive 相关功能（SQL执行、数据同步、数据地图）不可用
+#       脚本管理、调度配置、依赖关系、SQL格式化等功能正常
+# ============================================================
+
+services:
+
+  mysql:
+    image: mysql:8.0
+    container_name: datanote-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: datanote123
+      MYSQL_DATABASE: datanote
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./sql/init-all.sql:/docker-entrypoint-initdb.d/01_init.sql
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  datanote:
+    build: .
+    container_name: datanote-app
+    ports:
+      - "8099:8099"
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USERNAME: root
+      DB_PASSWORD: datanote123
+      HIVE_URL: ""
+      JAVA_OPTS: "-Xms256m -Xmx512m"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mysql_data:

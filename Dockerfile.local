@@ -1,0 +1,19 @@
+# 本地快速构建（跳过 Maven 编译，直接用已编译的 jar）
+# 用法：docker-compose -f docker-compose.yml build --build-arg DOCKERFILE=Dockerfile.local
+FROM eclipse-temurin:8-jre
+
+WORKDIR /app
+COPY target/datanote-1.0.0.jar app.jar
+
+EXPOSE 8099
+
+ENV DB_HOST=127.0.0.1 \
+    DB_PORT=3306 \
+    DB_USERNAME=root \
+    DB_PASSWORD= \
+    HIVE_URL="jdbc:hive2://127.0.0.1:10000/default;auth=noSasl" \
+    HADOOP_HOME=/opt/hadoop \
+    DATAX_HOME=/opt/datax \
+    JAVA_OPTS="-Xms512m -Xmx1g"
+
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

@@ -1,0 +1,78 @@
+# ============================================================
+#  DataNote 配置文件（示例）
+#  首次部署请复制本文件为 application.yml 并修改以下配置
+# ============================================================
+
+server:
+  port: 8099
+
+# -------------------- MySQL 元数据库 --------------------
+# DataNote 自身的元数据存储，需提前创建数据库并执行 sql/ 目录下的建表脚本
+spring:
+  main:
+    allow-circular-references: true
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/datanote?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: your_mysql_password
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+# -------------------- MyBatis-Plus --------------------
+mybatis-plus:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+# -------------------- Hive JDBC --------------------
+# 连接 HiveServer2，用于执行 HiveSQL 脚本
+# auth=noSasl 表示无认证模式，根据实际 Hive 配置调整
+hive:
+  url: jdbc:hive2://127.0.0.1:10000/default;auth=noSasl
+  username: ""
+  password: ""
+  default-fs: hdfs://localhost:9000
+  warehouse: /user/hive/warehouse
+
+# -------------------- DataX 数据同步 --------------------
+# home: DataX 安装目录（需包含 bin/datax.py）
+# job-dir: DataX 临时 job 文件存放目录
+datax:
+  home: /opt/datax
+  jvm: "-Xms1g -Xmx1g"
+  job-dir: /tmp/datax_jobs
+
+# -------------------- DolphinScheduler 调度 --------------------
+# 用于脚本上线调度，需提前部署 DolphinScheduler 3.x
+# token: 在 DS 安全中心 → 令牌管理 中创建
+# project-code: 在 DS 项目管理页面 URL 中获取
+# tenant-code: DS 安全中心 → 租户管理 中的租户编码
+dolphin:
+  api-url: http://127.0.0.1:12345/dolphinscheduler
+  token: your_ds_api_token
+  project-code: 0
+  tenant-code: default
+
+# -------------------- DataNote 配置 --------------------
+# crypto.key: 用于数据源密码加密的密钥（建议 16 位随机字符串）
+# auth: 登录认证配置
+# ai: AI 助手配置（Claude API）
+datanote:
+  crypto:
+    key: your_crypto_key_here
+  auth:
+    username: admin
+    password: your_admin_password
+  ai:
+    api-key: your_claude_api_key
+    model: claude-sonnet-4-6
+    base-url: https://api.anthropic.com
+
+# -------------------- SpringDoc API 文档 --------------------
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha

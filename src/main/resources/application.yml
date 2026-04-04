@@ -1,0 +1,66 @@
+# ============================================================
+#  DataNote 配置文件
+#  开源部署时请根据实际环境修改以下配置
+# ============================================================
+
+server:
+  port: 8099
+
+# -------------------- MySQL 元数据库 --------------------
+spring:
+  main:
+    allow-circular-references: true  # TaskSchedulerService <-> TaskExecutionService 循环依赖
+  datasource:
+    url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/datanote?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+# -------------------- MyBatis-Plus --------------------
+mybatis-plus:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: ${MYBATIS_LOG_IMPL:org.apache.ibatis.logging.nologging.NoLoggingImpl}
+
+# -------------------- Hive JDBC --------------------
+hive:
+  url: ${HIVE_URL:jdbc:hive2://127.0.0.1:10010/default;auth=noSasl}
+  username: ${HIVE_USERNAME:}
+  password: ${HIVE_PASSWORD:}
+  default-fs: ${HIVE_DEFAULT_FS:hdfs://localhost:9000}
+  warehouse: ${HIVE_WAREHOUSE:/user/hive/warehouse}
+
+# -------------------- DataX 数据同步 --------------------
+datax:
+  home: ${DATAX_HOME:/opt/datax}
+  jvm: ${DATAX_JVM:-Xms1g -Xmx1g}
+  job-dir: ${DATAX_JOB_DIR:/tmp/datax_jobs}
+
+# -------------------- DolphinScheduler 调度 --------------------
+dolphin:
+  api-url: ${DS_API_URL:http://127.0.0.1:12345/dolphinscheduler}
+  token: ${DS_TOKEN:}
+  project-code: ${DS_PROJECT_CODE:0}
+  tenant-code: ${DS_TENANT_CODE:default}
+
+# -------------------- DataNote 配置 --------------------
+datanote:
+  crypto:
+    key: ${DATANOTE_CRYPTO_KEY:}
+  auth:
+    username: ${DATANOTE_USERNAME:admin}
+    password: ${DATANOTE_PASSWORD:}
+  ai:
+    api-key: ${CLAUDE_API_KEY:}
+    model: ${CLAUDE_MODEL:claude-sonnet-4-6}
+    base-url: ${CLAUDE_BASE_URL:https://api.anthropic.com}
+
+# -------------------- SpringDoc API 文档 --------------------
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
