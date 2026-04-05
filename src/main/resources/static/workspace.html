@@ -9308,35 +9308,69 @@ function dmRenderFields(columns) {
     body.innerHTML = '<div class="datamap-empty">暂无字段信息</div>';
     return;
   }
-  var html = '<table class="datamap-table"><thead><tr>'
-    + '<th style="width:40px;">#</th>'
-    + '<th>字段名</th>'
-    + '<th>中文名</th>'
-    + '<th>类型</th>'
-    + '<th style="width:60px;">可空</th>'
-    + '<th style="width:60px;">键</th>'
-    + '<th>注释</th>'
-    + '<th style="width:50px;">操作</th>'
+  var html = '<div style="max-height:500px;overflow-y:auto;">'
+    + '<table class="datamap-table" style="width:100%;">'
+    + '<thead style="position:sticky;top:0;background:var(--bg-card);z-index:1;"><tr>'
+    + '<th style="width:36px;">#</th>'
+    + '<th style="text-align:left;">字段名</th>'
+    + '<th style="text-align:left;">中文名</th>'
+    + '<th style="text-align:left;">类型</th>'
+    + '<th style="text-align:left;">注释</th>'
+    + '<th style="width:100px;text-align:center;">操作</th>'
     + '</tr></thead><tbody>';
   columns.forEach(function(col, i) {
-    var keyBadge = '';
-    if (col.key === 'PRI') keyBadge = '<span style="color:#ef4444;font-weight:600;">PRI</span>';
-    else if (col.key === 'UNI') keyBadge = '<span style="color:#f59e0b;">UNI</span>';
-    else if (col.key === 'MUL') keyBadge = '<span style="color:var(--text-muted);">MUL</span>';
+    var chineseName = col.comment || '';
     html += '<tr>'
       + '<td class="dm-num">' + (i + 1) + '</td>'
-      + '<td class="dm-tname">' + escapeHtml(col.name) + '</td>'
-      + '<td><input class="dm-field-edit-input" id="dmFieldBiz_' + i + '" value="" placeholder="中文名" style="width:120px;"></td>'
-      + '<td style="font-size:12px;color:var(--text-muted);">' + escapeHtml(col.type) + '</td>'
-      + '<td style="font-size:12px;">' + (col.nullable === 'YES' ? '<span style="color:var(--text-muted);">YES</span>' : '<span style="font-weight:500;">NO</span>') + '</td>'
-      + '<td>' + keyBadge + '</td>'
+      + '<td class="dm-tname" id="dmFieldName_' + i + '">' + escapeHtml(col.name) + '</td>'
+      + '<td id="dmFieldCn_' + i + '" style="font-size:12px;">' + escapeHtml(chineseName) + '</td>'
+      + '<td id="dmFieldType_' + i + '" style="font-size:12px;color:var(--text-muted);">' + escapeHtml(col.type) + '</td>'
       + '<td style="font-size:12px;color:var(--text-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;">' + escapeHtml(col.comment || '') + '</td>'
-      + '<td></td>'
+      + '<td style="text-align:center;">'
+      + '<button class="btn btn-sm" onclick="dmEditField(' + i + ')" style="font-size:11px;padding:1px 6px;margin-right:2px;">编辑</button>'
+      + '<button class="btn btn-sm" onclick="dmSaveField(' + i + ')" style="font-size:11px;padding:1px 6px;display:none;" id="dmSaveBtn_' + i + '">保存</button>'
+      + '</td>'
       + '</tr>';
   });
-  html += '</tbody></table>';
-  html += '<div style="margin-top:12px;text-align:right;"><button class="btn btn-primary btn-sm" onclick="dmSaveFieldMeta()">保存字段修改</button></div>';
+  html += '</tbody></table></div>';
   body.innerHTML = html;
+}
+
+function dmEditField(idx) {
+  var col = dmFieldsData[idx];
+  var nameTd = document.getElementById('dmFieldName_' + idx);
+  var cnTd = document.getElementById('dmFieldCn_' + idx);
+  var typeTd = document.getElementById('dmFieldType_' + idx);
+  var saveBtn = document.getElementById('dmSaveBtn_' + idx);
+
+  nameTd.innerHTML = '<input class="prop-input" id="dmEditName_' + idx + '" value="' + escapeHtml(col.name) + '" style="width:100%;font-size:12px;">';
+  cnTd.innerHTML = '<input class="prop-input" id="dmEditCn_' + idx + '" value="' + escapeHtml(col.comment || '') + '" style="width:100%;font-size:12px;">';
+  typeTd.innerHTML = '<input class="prop-input" id="dmEditType_' + idx + '" value="' + escapeHtml(col.type) + '" style="width:100%;font-size:12px;">';
+  saveBtn.style.display = 'inline-block';
+}
+
+function dmSaveField(idx) {
+  var nameInput = document.getElementById('dmEditName_' + idx);
+  var cnInput = document.getElementById('dmEditCn_' + idx);
+  var typeInput = document.getElementById('dmEditType_' + idx);
+  if (!nameInput) return;
+
+  var newName = nameInput.value.trim();
+  var newCn = cnInput ? cnInput.value.trim() : '';
+  var newType = typeInput ? typeInput.value.trim() : '';
+
+  // 恢复显示模式
+  document.getElementById('dmFieldName_' + idx).textContent = newName;
+  document.getElementById('dmFieldCn_' + idx).textContent = newCn;
+  document.getElementById('dmFieldType_' + idx).textContent = newType;
+  document.getElementById('dmSaveBtn_' + idx).style.display = 'none';
+
+  // 更新内存数据
+  dmFieldsData[idx].name = newName;
+  dmFieldsData[idx].comment = newCn;
+  dmFieldsData[idx].type = newType;
+
+  msgBox('字段信息已更新（本地）');
 }
 
 function dmSaveFieldMeta() {
