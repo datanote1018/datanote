@@ -60,20 +60,13 @@ public class AiAssistController {
      */
     @Operation(summary = "自然语言转SQL")
     @PostMapping("/nl2sql")
-    public R<Map<String, String>> nl2sql(@RequestBody AiNl2SqlRequest body) {
+    public R<Map<String, Object>> nl2sql(@RequestBody AiNl2SqlRequest body) {
         String question = body.getQuestion();
         String tableSchema = body.getTableSchema() != null ? body.getTableSchema() : "";
         if (question == null || question.trim().isEmpty()) {
             return R.fail("问题不能为空");
         }
-        String reply = aiAssistService.nl2sql(question, tableSchema);
-        Map<String, String> result = new HashMap<>();
-        result.put("reply", reply);
-        // 提取 SQL 代码块
-        String sql = extractSqlBlock(reply);
-        if (sql != null) {
-            result.put("sql", sql);
-        }
+        Map<String, Object> result = aiAssistService.nl2sqlAgent(question, tableSchema);
         return R.ok(result);
     }
 
@@ -251,14 +244,4 @@ public class AiAssistController {
         return R.ok(result);
     }
 
-    private String extractSqlBlock(String text) {
-        int start = text.indexOf("```sql");
-        if (start == -1) start = text.indexOf("```SQL");
-        if (start == -1) return null;
-        start = text.indexOf('\n', start);
-        if (start == -1) return null;
-        int end = text.indexOf("```", start + 1);
-        if (end == -1) return null;
-        return text.substring(start + 1, end).trim();
-    }
 }

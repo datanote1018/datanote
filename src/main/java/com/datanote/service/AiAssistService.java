@@ -1,5 +1,6 @@
 package com.datanote.service;
 
+import com.datanote.config.HiveConfig;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.datanote.mapper.DnSystemConfigMapper;
 import com.datanote.model.DnSystemConfig;
@@ -16,7 +17,11 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.util.*;
+import java.util.regex.Pattern;
 
 /**
  * AI 辅助开发服务 — 调用 Claude API 实现 NL2SQL、SQL 解释等智能功能
@@ -28,6 +33,7 @@ public class AiAssistService {
 
     private final ObjectMapper objectMapper;
     private final DnSystemConfigMapper systemConfigMapper;
+    private final HiveConfig hiveConfig;
 
     @Value("${datanote.ai.api-key:}")
     private String envApiKey;
@@ -92,6 +98,19 @@ public class AiAssistService {
             "- 默认使用 HiveSQL 语法（支持分区表、ORC 格式等）\n" +
             "- SQL 语句用 ```sql 代码块包裹\n" +
             "- 回答简洁专业，中文回复";
+
+    private static final int NL2SQL_SCHEMA_TOP_TABLES = 5;
+    private static final int NL2SQL_SCHEMA_MAX_COLS = 12;
+    private static final int NL2SQL_MAX_REPAIR_ROUNDS = 2;
+    private static final int NL2SQL_DEFAULT_LIMIT = 100;
+    private static final Set<String> HIVE_SYS_DBS = new HashSet<String>(Arrays.asList(
+            "default", "information_schema", "sys"
+    ));
+    private static final Pattern DANGEROUS_SQL_PATTERN = Pattern.compile(
+            "\\b(insert|update|delete|drop|alter|truncate|create|grant|revoke|merge)\\b",
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern IDENTIFIER_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+$");
 
     /**
      * 调用 Claude API 进行对话
@@ -172,6 +191,102 @@ public class AiAssistService {
     }
 
     /**
+     * NL2SQL Agent：Schema 召回 + SQL 生成 + 守卫 + Dry-run + 最多2轮修复
+     */
+    public Map<String, Object> nl2sqlAgent(String question, String tableSchema) {
+        Map<String, Object> result = new HashMap<String, Object>();
+        List<Map<String, String>> trace = new ArrayList<Map<String, String>>();
+        result.put("trace", trace);
+
+        String safeQuestion = question == null ? "" : question.trim();
+        if (safeQuestion.isEmpty()) {
+            result.put("reply", "问题不能为空");
+            result.put("status", "failed");
+            result.put("attempts", 0);
+            result.put("error", "问题不能为空");
+            return result;
+        }
+
+        String schemaContext = buildSchemaContext(safeQuestion, tableSchema);
+        String prompt = "请根据以下需求生成 Hive SQL。严格要求：\n"
+                + "1) 只允许 SELECT 语句\n"
+                + "2) 仅返回 ```sql 代码块\n"
+                + "3) 不要输出解释文字\n\n"
+                + "需求：\n" + safeQuestion;
+        String aiReply = chat(prompt, schemaContext);
+        String sqlCandidate = extractSqlBlock(aiReply);
+        if (sqlCandidate == null || sqlCandidate.trim().isEmpty()) {
+            sqlCandidate = aiReply;
+        }
+
+        String lastError = null;
+        String currentSql = sqlCandidate;
+        String lastReply = aiReply;
+
+        for (int round = 0; round <= NL2SQL_MAX_REPAIR_ROUNDS; round++) {
+            int attempts = round + 1;
+            Map<String, String> traceItem = new LinkedHashMap<String, String>();
+            traceItem.put("attempt", String.valueOf(attempts));
+            traceItem.put("rawSql", safeSnippet(currentSql));
+
+            String guardedSql;
+            try {
+                guardedSql = ensureSafeSelectSql(currentSql);
+                traceItem.put("guardedSql", safeSnippet(guardedSql));
+            } catch (IllegalArgumentException ex) {
+                lastError = ex.getMessage();
+                traceItem.put("error", lastError);
+                trace.add(traceItem);
+                result.put("reply", lastReply);
+                result.put("status", "failed");
+                result.put("attempts", attempts);
+                result.put("error", lastError);
+                result.put("sql", null);
+                return result;
+            }
+
+            String dryRunError = dryRunSql(guardedSql);
+            if (dryRunError == null) {
+                traceItem.put("dryRun", "ok");
+                trace.add(traceItem);
+                result.put("reply", lastReply);
+                result.put("status", "success");
+                result.put("attempts", attempts);
+                result.put("error", "");
+                result.put("sql", guardedSql);
+                return result;
+            }
+
+            traceItem.put("dryRun", "failed");
+            traceItem.put("error", dryRunError);
+            trace.add(traceItem);
+            lastError = dryRunError;
+
+            if (round >= NL2SQL_MAX_REPAIR_ROUNDS) {
+                break;
+            }
+
+            String repairPrompt = "下面 SQL 在 Hive 执行失败，请修复为可执行的单条 SELECT 语句。\n"
+                    + "严格要求：\n"
+                    + "1) 只允许 SELECT\n"
+                    + "2) 仅返回 ```sql 代码块\n"
+                    + "3) 不要解释\n\n"
+                    + "原 SQL：\n```sql\n" + guardedSql + "\n```\n\n"
+                    + "错误信息：\n" + dryRunError;
+            lastReply = chat(repairPrompt, schemaContext);
+            String repaired = extractSqlBlock(lastReply);
+            currentSql = (repaired != null && !repaired.trim().isEmpty()) ? repaired : lastReply;
+        }
+
+        result.put("reply", lastReply);
+        result.put("status", "failed");
+        result.put("attempts", NL2SQL_MAX_REPAIR_ROUNDS + 1);
+        result.put("error", lastError != null ? lastError : "SQL 修复失败");
+        result.put("sql", null);
+        return result;
+    }
+
+    /**
      * SQL 解释
      */
     public String explainSql(String sql) {
@@ -185,6 +300,34 @@ public class AiAssistService {
     public String optimizeSql(String sql) {
         String prompt = "请分析以下 SQL 的性能问题并给出优化建议：\n```sql\n" + sql + "\n```";
         return chat(prompt, null);
+    }
+
+    String ensureSafeSelectSql(String sql) {
+        String cleaned = stripCodeFence(sql);
+        if (cleaned.isEmpty()) {
+            throw new IllegalArgumentException("AI 未返回 SQL");
+        }
+        String compact = cleaned.trim();
+        if (compact.endsWith(";")) {
+            compact = compact.substring(0, compact.length() - 1).trim();
+        }
+        if (compact.contains(";")) {
+            throw new IllegalArgumentException("仅允许单条 SELECT 语句");
+        }
+        if (compact.contains("--") || compact.contains("/*")) {
+            throw new IllegalArgumentException("SQL 含注释或疑似注入内容，已拒绝执行");
+        }
+        String lower = compact.toLowerCase(Locale.ROOT);
+        if (!lower.startsWith("select")) {
+            throw new IllegalArgumentException("仅允许 SELECT 语句");
+        }
+        if (DANGEROUS_SQL_PATTERN.matcher(lower).find()) {
+            throw new IllegalArgumentException("检测到危险关键字，已拒绝执行");
+        }
+        if (!containsLimit(lower)) {
+            compact = compact + " LIMIT " + NL2SQL_DEFAULT_LIMIT;
+        }
+        return compact;
     }
 
     private String callApi(String body, String prov, String key, String base) throws Exception {
@@ -268,6 +411,190 @@ public class AiAssistService {
         } catch (Exception e) {
             log.warn("AI connection test failed: {}", e.getMessage());
             return false;
+        }
+    }
+
+    private String buildSchemaContext(String question, String tableSchema) {
+        String trimmedSchema = tableSchema == null ? "" : tableSchema.trim();
+        if (!trimmedSchema.isEmpty()) {
+            return "以下是可用的表结构信息：\n" + trimmedSchema;
+        }
+        String recalled = recallSchemaContext(question, NL2SQL_SCHEMA_TOP_TABLES, NL2SQL_SCHEMA_MAX_COLS);
+        return recalled.isEmpty() ? "" : ("以下是可用的表结构信息：\n" + recalled);
+    }
+
+    private String recallSchemaContext(String question, int topKTables, int maxColumnsPerTable) {
+        if (!hiveConfig.isHiveAvailable()) {
+            return "";
+        }
+        List<String> tokens = tokenizeQuestion(question);
+        if (tokens.isEmpty()) {
+            return "";
+        }
+
+        List<TableCandidate> candidates = new ArrayList<TableCandidate>();
+        try (Connection conn = hiveConfig.getConnection();
+             Statement dbStmt = conn.createStatement();
+             ResultSet dbRs = dbStmt.executeQuery("SHOW DATABASES")) {
+            while (dbRs.next()) {
+                String db = dbRs.getString(1);
+                if (db == null || HIVE_SYS_DBS.contains(db.toLowerCase(Locale.ROOT))) {
+                    continue;
+                }
+                if (!isSafeIdentifier(db)) {
+                    continue;
+                }
+                try (Statement tbStmt = conn.createStatement();
+                     ResultSet tbRs = tbStmt.executeQuery("SHOW TABLES IN " + db)) {
+                    while (tbRs.next()) {
+                        String table = tbRs.getString(1);
+                        if (table == null || !isSafeIdentifier(table)) {
+                            continue;
+                        }
+                        int score = computeMatchScore(tokens, db, table);
+                        if (score > 0) {
+                            candidates.add(new TableCandidate(db, table, score));
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Schema recall failed: {}", e.getMessage());
+            return "";
+        }
+
+        if (candidates.isEmpty()) {
+            return "";
+        }
+        Collections.sort(candidates, new Comparator<TableCandidate>() {
+            @Override
+            public int compare(TableCandidate a, TableCandidate b) {
+                return Integer.compare(b.score, a.score);
+            }
+        });
+
+        StringBuilder sb = new StringBuilder();
+        int n = Math.min(topKTables, candidates.size());
+        for (int i = 0; i < n; i++) {
+            TableCandidate t = candidates.get(i);
+            sb.append(t.db).append(".").append(t.table).append(":\n");
+            appendColumns(sb, t.db, t.table, maxColumnsPerTable);
+            sb.append("\n");
+        }
+        return sb.toString().trim();
+    }
+
+    private void appendColumns(StringBuilder sb, String db, String table, int maxColumns) {
+        if (!isSafeIdentifier(db) || !isSafeIdentifier(table)) {
+            sb.append("  - <columns unavailable>\n");
+            return;
+        }
+        try (Connection conn = hiveConfig.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("DESCRIBE " + db + "." + table)) {
+            int cnt = 0;
+            while (rs.next() && cnt < maxColumns) {
+                String col = rs.getString(1);
+                if (col == null || col.trim().isEmpty() || col.trim().startsWith("#")) {
+                    break;
+                }
+                String type = rs.getString(2) == null ? "" : rs.getString(2).trim();
+                sb.append("  - ").append(col.trim()).append(" ").append(type).append("\n");
+                cnt++;
+            }
+        } catch (Exception e) {
+            sb.append("  - <columns unavailable>\n");
+        }
+    }
+
+    private int computeMatchScore(List<String> tokens, String db, String table) {
+        String dbLower = db.toLowerCase(Locale.ROOT);
+        String tableLower = table.toLowerCase(Locale.ROOT);
+        int score = 0;
+        for (String token : tokens) {
+            if (dbLower.contains(token)) score += 2;
+            if (tableLower.contains(token)) score += 4;
+        }
+        return score;
+    }
+
+    private List<String> tokenizeQuestion(String question) {
+        if (question == null) return Collections.emptyList();
+        String[] raw = question.toLowerCase(Locale.ROOT).split("[^a-z0-9_\\u4e00-\\u9fa5]+");
+        List<String> tokens = new ArrayList<String>();
+        for (String t : raw) {
+            if (t != null && t.length() >= 2) {
+                tokens.add(t);
+            }
+        }
+        return tokens;
+    }
+
+    private String dryRunSql(String sql) {
+        if (!hiveConfig.isHiveAvailable()) {
+            return null;
+        }
+        try (Connection conn = hiveConfig.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            if (rs != null) {
+                rs.next();
+            }
+            return null;
+        } catch (Exception e) {
+            return e.getMessage() != null ? e.getMessage() : "Dry-run 失败";
+        }
+    }
+
+    private boolean containsLimit(String lowerSql) {
+        return lowerSql.matches("(?s).*\\blimit\\s+\\d+\\b.*");
+    }
+
+    private String stripCodeFence(String text) {
+        if (text == null) {
+            return "";
+        }
+        String trimmed = text.trim();
+        String block = extractSqlBlock(trimmed);
+        if (block != null) {
+            return block.trim();
+        }
+        return trimmed.replace("```sql", "")
+                .replace("```SQL", "")
+                .replace("```", "")
+                .trim();
+    }
+
+    private String extractSqlBlock(String text) {
+        int start = text.indexOf("```sql");
+        if (start == -1) start = text.indexOf("```SQL");
+        if (start == -1) return null;
+        start = text.indexOf('\n', start);
+        if (start == -1) return null;
+        int end = text.indexOf("```", start + 1);
+        if (end == -1) return null;
+        return text.substring(start + 1, end).trim();
+    }
+
+    private String safeSnippet(String text) {
+        if (text == null) return "";
+        String s = text.replace("\n", " ").trim();
+        return s.length() > 300 ? s.substring(0, 300) + "..." : s;
+    }
+
+    private boolean isSafeIdentifier(String name) {
+        return name != null && IDENTIFIER_PATTERN.matcher(name).matches();
+    }
+
+    private static final class TableCandidate {
+        private final String db;
+        private final String table;
+        private final int score;
+
+        private TableCandidate(String db, String table, int score) {
+            this.db = db;
+            this.table = table;
+            this.score = score;
         }
     }
 }
