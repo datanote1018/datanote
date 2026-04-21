@@ -32,7 +32,7 @@ class MetadataControllerTest {
 
     @Test
     void databases_returnsOk() throws Exception {
-        when(metadataService.getDatabases()).thenReturn(Arrays.asList("datanote", "base_data"));
+        when(dataMapService.getHiveDatabases()).thenReturn(Arrays.asList("datanote", "base_data"));
         R<List<String>> r = controller.databases();
         assertEquals(0, r.getCode());
         assertEquals(2, r.getData().size());
@@ -40,7 +40,7 @@ class MetadataControllerTest {
 
     @Test
     void tables_returnsOk() throws Exception {
-        when(metadataService.getTables("datanote")).thenReturn(Arrays.asList("dn_script", "dn_sync_task"));
+        when(dataMapService.getHiveTables("datanote")).thenReturn(Arrays.asList("dn_script", "dn_sync_task"));
         R<List<String>> r = controller.tables("datanote");
         assertEquals(0, r.getCode());
         assertEquals(2, r.getData().size());
@@ -51,7 +51,7 @@ class MetadataControllerTest {
         ColumnInfo col = new ColumnInfo();
         col.setName("id");
         col.setType("bigint");
-        when(metadataService.getColumns("datanote", "dn_script")).thenReturn(Collections.singletonList(col));
+        when(dataMapService.getHiveColumns("datanote", "dn_script")).thenReturn(Collections.singletonList(col));
         R<List<ColumnInfo>> r = controller.columns("datanote", "dn_script");
         assertEquals(0, r.getCode());
         assertEquals("id", r.getData().get(0).getName());
