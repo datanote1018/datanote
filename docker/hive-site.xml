@@ -16,6 +16,13 @@
     <name>hive.security.authorization.enabled</name>
     <value>false</value>
   </property>
+  <!-- 关闭通知事件 API 的 proxy 鉴权，否则 NOSASL/doAs=false 下 HiveServer2 启动时
+       调用 get_current_notificationEventId 会被 metastore 拒绝（User hive is not allowed），
+       导致 HiveServer2 反复重试、永远起不来 -->
+  <property>
+    <name>hive.metastore.event.db.notification.api.auth</name>
+    <value>false</value>
+  </property>
   <property>
     <name>hive.execution.engine</name>
     <value>tez</value>

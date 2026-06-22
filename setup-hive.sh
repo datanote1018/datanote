@@ -207,6 +207,7 @@ else
   info "启动 HDFS NameNode..."
   docker run -d \
     --name datanote-namenode \
+    --platform linux/amd64 \
     --network $NETWORK \
     --hostname namenode \
     -p ${HDFS_WEB_PORT}:9870 \
@@ -237,6 +238,7 @@ else
   info "启动 HDFS DataNode..."
   docker run -d \
     --name datanote-datanode \
+    --platform linux/amd64 \
     --network $NETWORK \
     --hostname datanode \
     -e CORE-SITE.XML_fs.defaultFS="hdfs://namenode:8020" \
@@ -274,9 +276,33 @@ else
     METASTORE_MYSQL_PORT="3306"  # 容器内部端口固定 3306
   fi
 
+  # 初始化 Metastore schema（首次必须）。
+  # 镜像入口在 IS_RESUME=true 时会跳过 schematool，若 MySQL 里没有建表，
+  # metastore 启动会报 "Version information not found in metastore." 并无限重启。
+  # schematool 会加载 hive-site.xml（engine=tez），需把 tez 放进 classpath，否则报 TezConfiguration ClassNotFound。
+  info "初始化 Hive Metastore schema..."
+  SCHEMA_LOG=$(docker run --rm --network $NETWORK \
+    --platform linux/amd64 \
+    -e HADOOP_CLASSPATH='/opt/tez/*:/opt/tez/lib/*' \
+    --mount type=bind,source="$JDBC_JAR",target=/opt/hive/lib/mysql-connector-j-8.0.33.jar \
+    --entrypoint /opt/hive/bin/schematool \
+    apache/hive:3.1.3 \
+    -dbType mysql -initSchema \
+    -url "jdbc:mysql://${METASTORE_MYSQL_HOST}:${METASTORE_MYSQL_PORT}/hive_metastore?createDatabaseIfNotExist=true&useSSL=false" \
+    -driver com.mysql.cj.jdbc.Driver -userName root -passWord "$MYSQL_PASSWORD" 2>&1) || true
+  if echo "$SCHEMA_LOG" | grep -qi 'schemaTool completed'; then
+    info "Metastore schema 初始化完成"
+  elif echo "$SCHEMA_LOG" | grep -qi 'already exists'; then
+    info "Metastore schema 已存在，跳过"
+  else
+    warn "Metastore schema 初始化可能失败，继续启动（详见下方日志）："
+    echo "$SCHEMA_LOG" | tail -6
+  fi
+
   info "启动 Hive Metastore..."
   docker run -d \
     --name datanote-metastore \
+    --platform linux/amd64 \
     --network $NETWORK \
     --hostname metastore \
     -p 9083:9083 \
@@ -307,6 +333,7 @@ else
   info "启动 HiveServer2..."
   docker run -d \
     --name datanote-hiveserver2 \
+    --platform linux/amd64 \
     --network $NETWORK \
     --hostname hiveserver2 \
     -p ${HIVE_PORT}:10000 \
@@ -327,8 +354,9 @@ else
     --restart unless-stopped \
     apache/hive:3.1.3
 
+  # amd64 镜像在 arm64 主机上走 QEMU 模拟，HiveServer2 首次绑定端口较慢，超时给足
   echo -n "等待 HiveServer2 就绪"
-  wait_for "HiveServer2" "docker exec datanote-hiveserver2 beeline -u 'jdbc:hive2://localhost:10000/default;auth=noSasl' -e 'SELECT 1;'" 30
+  wait_for "HiveServer2" "docker exec datanote-hiveserver2 beeline -u 'jdbc:hive2://localhost:10000/default;auth=noSasl' -e 'SELECT 1;'" 120
 fi
 
 # 创建数仓分层库
