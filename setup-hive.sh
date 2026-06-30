@@ -250,11 +250,25 @@ else
   wait_for "HDFS" "docker exec datanote-namenode hdfs dfs -ls /" 20
 fi
 
-# 初始化 HDFS 目录
+# 初始化 HDFS 目录（ARM64 OpenJDK 8 偶发 JVM crash，加重试）
+init_hdfs_dir() {
+  local path=$1
+  local max_retry=3
+  for i in $(seq 1 $max_retry); do
+    if docker exec datanote-namenode hdfs dfs -mkdir -p "$path" 2>/dev/null; then
+      return 0
+    fi
+    warn "HDFS mkdir $path 失败 (第 $i 次)，重试..."
+    sleep 3
+  done
+  warn "HDFS mkdir $path 最终失败，跳过"
+  return 1
+}
+
 info "初始化 HDFS 目录..."
-docker exec datanote-namenode hdfs dfs -mkdir -p /user/hive/warehouse 2>/dev/null || true
-docker exec datanote-namenode hdfs dfs -mkdir -p /tmp 2>/dev/null || true
-docker exec datanote-namenode hdfs dfs -mkdir -p /tmp/hive 2>/dev/null || true
+init_hdfs_dir /user/hive/warehouse
+init_hdfs_dir /tmp
+init_hdfs_dir /tmp/hive
 docker exec datanote-namenode hdfs dfs -chmod -R 777 /user/hive/warehouse 2>/dev/null || true
 docker exec datanote-namenode hdfs dfs -chmod -R 777 /tmp 2>/dev/null || true
 docker exec datanote-namenode hdfs dfs -chmod -R 777 /tmp/hive 2>/dev/null || true
