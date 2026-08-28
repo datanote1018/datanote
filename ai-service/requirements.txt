@@ -1,0 +1,23 @@
+# DataNote AI Service 依赖
+# 安装：pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+fastapi
+uvicorn[standard]
+pydantic
+
+# LangChain
+langchain
+langchain-core
+langchain-community
+langchain-redis
+
+# 模型 / 向量（通义 DashScope）
+dashscope
+
+# 存储
+redis
+pymysql
+
+# 配置 / 加密（读 datanote 的加密 AI 配置）
+python-dotenv
+pycryptodome

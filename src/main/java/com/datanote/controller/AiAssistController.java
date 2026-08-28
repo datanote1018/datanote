@@ -11,7 +11,6 @@ import com.datanote.model.dto.AiNl2SqlRequest;
 import com.datanote.model.dto.AiSqlRequest;
 import com.datanote.model.dto.GenerateTableNameRequest;
 import com.datanote.service.AiAssistService;
-import com.datanote.util.CryptoUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -34,9 +33,6 @@ public class AiAssistController {
     private final AiAssistService aiAssistService;
     private final DnScriptMapper scriptMapper;
     private final DnSystemConfigMapper systemConfigMapper;
-
-    @Value("${datanote.crypto.key:}")
-    private String cryptoKey;
 
     /**
      * AI 对话
@@ -130,8 +126,8 @@ public class AiAssistController {
         cfg.put("provider", getConfigValue("ai.provider", "anthropic"));
         cfg.put("baseUrl", getConfigValue("ai.base-url", ""));
         cfg.put("model", getConfigValue("ai.model", ""));
-        String key = getConfigValue("ai.api-key", "");
-        cfg.put("apiKeyMasked", key.isEmpty() ? "" : key.substring(0, Math.min(8, key.length())) + "***");
+        // API Key 改由 ai-service/.env 提供，页面只显示是否已配置，不返回密钥内容
+        cfg.put("apiKeyConfigured", String.valueOf(aiAssistService.isApiKeyConfigured()));
         return R.ok(cfg);
     }
 
@@ -144,11 +140,7 @@ public class AiAssistController {
         saveConfigValue("ai.provider", body.get("provider"), "AI Provider");
         saveConfigValue("ai.base-url", body.get("baseUrl"), "API Base URL");
         saveConfigValue("ai.model", body.get("model"), "AI Model");
-        if (body.get("apiKey") != null && !body.get("apiKey").contains("***")) {
-            // 加密存储 API Key
-            String encrypted = CryptoUtil.encrypt(body.get("apiKey"), cryptoKey);
-            saveConfigValue("ai.api-key", encrypted != null ? encrypted : body.get("apiKey"), "API Key (encrypted)");
-        }
+        // API Key 不再经由页面保存：它只存在于 ai-service/.env，改完需重启服务
         // 通知 AiAssistService 重新加载配置
         aiAssistService.reloadConfig();
         return R.ok();
@@ -160,12 +152,10 @@ public class AiAssistController {
     @Operation(summary = "测试AI连接")
     @PostMapping("/test-connection")
     public R<Void> testAiConnection(@RequestBody Map<String, String> body) {
-        String key = body.get("apiKey");
-        if (key != null && key.contains("***")) {
-            key = getConfigValue("ai.api-key", "");
-        }
+        // 用当前生效的 API Key（来自 ai-service/.env），页面不再传密钥
+        String key = aiAssistService.getApiKey();
         if (key == null || key.isEmpty()) {
-            return R.fail("API Key 不能为空");
+            return R.fail("未配置 API Key —— 请在 ai-service/.env 中设置 QWEN_API_KEY 后重启服务");
         }
         try {
             boolean ok = aiAssistService.testConnection(
@@ -179,11 +169,6 @@ public class AiAssistController {
     private String getConfigValue(String key, String defaultValue) {
         DnSystemConfig cfg = systemConfigMapper.selectById(key);
         if (cfg == null || cfg.getConfigValue() == null) return defaultValue;
-        // API Key 需要解密
-        if (key.equals("ai.api-key")) {
-            String decrypted = CryptoUtil.decrypt(cfg.getConfigValue(), cryptoKey);
-            return decrypted != null ? decrypted : cfg.getConfigValue();
-        }
         return cfg.getConfigValue();
     }
 
@@ -208,26 +193,14 @@ public class AiAssistController {
     @Operation(summary = "AI生成标准化表名")
     @PostMapping("/generate-table-name")
     public R<Map<String, Object>> generateTableName(@RequestBody GenerateTableNameRequest req) {
-        String prompt = "你是一个数据仓库命名规范专家。请根据以下信息生成一个标准化的Hive表名：\n"
-                + "- 数仓分层：" + req.getLayer() + "\n"
-                + "- 表类型：" + req.getTableType() + "\n"
-                + "- 主题域：" + req.getSubject() + "\n"
-                + "- 二级主题：" + (req.getSubSubject() != null ? req.getSubSubject() : "无") + "\n"
-                + "- 模型描述：" + req.getDescription() + "\n"
-                + "- 数据库名：" + (req.getDbName() != null ? req.getDbName() : "default") + "\n\n"
-                + "命名规范：{分层}_{库名}_{主题}_{描述}_{full/incr}\n"
-                + "例如：dwd_mall_trade_order_detail_full\n\n"
-                + "请只返回一个表名，不要其他解释。表名全部小写，用下划线连接。";
-
-        String tableName = aiAssistService.chat(prompt, null);
-        tableName = tableName.trim().toLowerCase().replaceAll("[^a-z0-9_]", "");
+        Map<String, Object> result = aiAssistService.generateTableName(req);
+        String tableName = String.valueOf(result.getOrDefault("tableName", ""));
 
         // Check uniqueness
         QueryWrapper<DnScript> qw = new QueryWrapper<>();
         qw.eq("script_name", tableName);
         boolean exists = scriptMapper.selectCount(qw) > 0;
 
-        Map<String, Object> result = new HashMap<>();
         result.put("tableName", tableName);
         result.put("exists", exists);
         return R.ok(result);

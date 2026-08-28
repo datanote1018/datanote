@@ -1,7 +1,9 @@
 package com.datanote.controller;
 
 import com.datanote.config.AuthProperties;
+import com.datanote.model.DnUser;
 import com.datanote.model.R;
+import com.datanote.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.Data;
@@ -27,35 +29,31 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AuthController {
 
-    private final AuthenticationManager authenticationManager;
     private final AuthProperties authProperties;
+    private final UserService userService;
 
     /**
-     * 登录
+     * 登录 — 校验数据库用户，成功返回 userId（AI 会话隔离用）
      */
     @Operation(summary = "用户登录")
     @PostMapping("/login")
     public R<Map<String, Object>> login(@RequestBody LoginRequest request, HttpServletRequest httpRequest) {
-        if (!authProperties.isEnabled()) {
-            return R.fail(R.CODE_BAD_REQUEST, "认证未启用");
-        }
-
-        try {
-            Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
-            );
-
-            // 认证成功，创建 Session
-            SecurityContextHolder.getContext().setAuthentication(authentication);
-            HttpSession session = httpRequest.getSession(true);
-            session.setAttribute("SPRING_SECURITY_CONTEXT", SecurityContextHolder.getContext());
-
-            Map<String, Object> data = new HashMap<>();
-            data.put("username", authentication.getName());
-            return R.ok(data);
-        } catch (AuthenticationException e) {
+        DnUser user = userService.login(request.getUsername(), request.getPassword());
+        if (user == null) {
             return R.fail(R.CODE_UNAUTHORIZED, "用户名或密码错误");
         }
+
+        // 记录到 Session（后端可据此识别当前用户）
+        HttpSession session = httpRequest.getSession(true);
+        session.setAttribute("USER_ID", user.getId());
+        session.setAttribute("USERNAME", user.getUsername());
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("userId", user.getId());
+        data.put("username", user.getUsername());
+        data.put("nickname", user.getNickname());
+        data.put("role", user.getRole());
+        return R.ok(data);
     }
 
     /**

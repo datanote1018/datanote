@@ -37,6 +37,15 @@ DB_PORT=${MYSQL_PORT}
 DB_USER=root
 DB_PASS=${MYSQL_PASSWORD}
 
+# AI API Key 从 ai-service/.env 注入（与 Python 侧共用同一份配置，避免两处不一致）
+AI_ENV="$SCRIPT_DIR/ai-service/.env"
+if [ -f "$AI_ENV" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "$AI_ENV"
+  set +a
+fi
+
 # ---------- 停止 ----------
 if [ "$1" = "stop" ]; then
   PID=$(lsof -ti:$DATANOTE_PORT 2>/dev/null | head -1)
@@ -87,6 +96,20 @@ if [ -n "$EXISTING_PID" ]; then
 fi
 
 # ---------- 编译（如果 JAR 不存在）----------
+# 本项目是 Java 8。Maven 若默认用新版 JDK，Lombok 注解处理会失效，
+# 编译时报一堆 "找不到符号 setXxx / log" —— 必须显式指定 Java 8。
+find_java8() {
+  local c
+  for c in \
+    "$JAVA8_HOME" \
+    /Library/Java/JavaVirtualMachines/zulu-8.jdk/Contents/Home \
+    /Library/Java/JavaVirtualMachines/jdk1.8.0_231.jdk/Contents/Home \
+    "$(/usr/libexec/java_home -v 1.8 2>/dev/null)"; do
+    [ -n "$c" ] && [ -x "$c/bin/javac" ] && { echo "$c"; return 0; }
+  done
+  return 1
+}
+
 if [ ! -f "$JAR_FILE" ]; then
   info "JAR 包不存在，开始编译..."
   if ! command -v mvn &>/dev/null; then
@@ -95,8 +118,16 @@ if [ ! -f "$JAR_FILE" ]; then
     echo "  或从 GitHub Release 下载 JAR 放到 $SCRIPT_DIR/target/ 目录"
     exit 1
   fi
+  if J8="$(find_java8)"; then
+    export JAVA_HOME="$J8"
+    info "使用 Java 8 编译: $JAVA_HOME"
+  else
+    warn "未找到 Java 8 JDK，将用默认 JDK 编译（Lombok 可能报「找不到符号」）"
+    warn "  安装：brew install --cask zulu@8    或设置 JAVA8_HOME 指向 Java 8"
+  fi
   cd "$SCRIPT_DIR"
-  mvn package -DskipTests -q
+  # 不加 clean：编译失败时至少保留上一次能用的 JAR
+  mvn package -DskipTests -q || { error "编译失败，JAR 未生成"; exit 1; }
   info "编译完成"
 fi
 
@@ -122,8 +153,9 @@ nohup java \
   --spring.datasource.url="jdbc:mysql://${DB_HOST}:${DB_PORT}/datanote?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true" \
   --spring.datasource.username=$DB_USER \
   --spring.datasource.password=$DB_PASS \
-  --datanote.crypto.key=${CRYPTO_KEY:-DataNote_AES_Key} \
+  --datanote.crypto.key=${CRYPTO_KEY:?请在 datanote.conf 中设置 CRYPTO_KEY} \
   --datax.mode=${DATAX_MODE:-local} \
+  --spring.web.resources.static-locations=file:${SCRIPT_DIR}/src/main/resources/static/,classpath:/static/ \
   --server.port=${DATANOTE_PORT:-8099} \
   > /tmp/datanote.log 2>&1 &
 

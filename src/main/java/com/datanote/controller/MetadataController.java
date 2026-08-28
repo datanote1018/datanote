@@ -2,6 +2,7 @@ package com.datanote.controller;
 
 import com.datanote.model.*;
 import com.datanote.service.DataMapService;
+import com.datanote.service.DataProfileService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ import java.util.*;
 public class MetadataController {
 
     private final DataMapService dataMapService;
+    private final DataProfileService dataProfileService;
 
     private static final String NAME_PATTERN = "[a-zA-Z0-9_]+";
 
@@ -234,6 +236,47 @@ public class MetadataController {
         } catch (Exception e) {
             log.error("数据探查失败: {}.{}", db, table, e);
             return R.fail("探查失败");
+        }
+    }
+
+    @Operation(summary = "获取 AI 数据探查报告（有缓存直接返回）")
+    @GetMapping("/profile/ai")
+    public R<Map<String, Object>> aiProfileGet(@RequestParam String db, @RequestParam String table) {
+        if (!db.matches(NAME_PATTERN) || !table.matches(NAME_PATTERN)) return R.fail("非法的库名或表名");
+        try {
+            DnDataProfile cached = dataProfileService.getCached(db, table);
+            if (cached == null) {
+                Map<String, Object> empty = new HashMap<>();
+                empty.put("exists", false);
+                return R.ok(empty);
+            }
+            Map<String, Object> data = new HashMap<>();
+            data.put("exists", true);
+            data.put("profileTime", cached.getProfileTime() != null ? cached.getProfileTime().toString() : "");
+            data.put("aiReport", cached.getAiReport());
+            data.put("rawStats", cached.getRawStats());
+            return R.ok(data);
+        } catch (Exception e) {
+            log.error("获取AI探查失败: {}.{}", db, table, e);
+            return R.fail("获取失败: " + e.getMessage());
+        }
+    }
+
+    @Operation(summary = "运行/刷新 AI 数据探查（重新收集统计并调用大模型）")
+    @PostMapping("/profile/ai/run")
+    public R<Map<String, Object>> aiProfileRun(@RequestParam String db, @RequestParam String table) {
+        if (!db.matches(NAME_PATTERN) || !table.matches(NAME_PATTERN)) return R.fail("非法的库名或表名");
+        try {
+            DnDataProfile record = dataProfileService.runProfile(db, table);
+            Map<String, Object> data = new HashMap<>();
+            data.put("exists", true);
+            data.put("profileTime", record.getProfileTime() != null ? record.getProfileTime().toString() : "");
+            data.put("aiReport", record.getAiReport());
+            data.put("rawStats", record.getRawStats());
+            return R.ok(data);
+        } catch (Exception e) {
+            log.error("AI探查运行失败: {}.{}", db, table, e);
+            return R.fail("探查失败: " + e.getMessage());
         }
     }
 

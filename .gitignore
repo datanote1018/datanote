@@ -32,3 +32,14 @@ src/main/resources/application-local.yml
 # Runtime data
 data/
 logs/
+
+# AI service 密钥与缓存（勿提交）
+ai-service/.env
+ai-service/__pycache__/
+**/__pycache__/
+
+# 本地提交前安全闸门（只在本机用，不入库）
+scripts/git-guard-*
+
+# 本机部署配置（含密钥），只保留模板 datanote.conf.example
+datanote.conf

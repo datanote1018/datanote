@@ -6,7 +6,8 @@
 # ---------- MySQL ----------
 MYSQL_HOST=127.0.0.1
 MYSQL_PORT=3306
-MYSQL_PASSWORD=root
+# MySQL 口令：首次部署请自行填写
+MYSQL_PASSWORD=
 
 # ---------- Hive ----------
 HIVE_PORT=10800
@@ -19,10 +20,12 @@ DATANOTE_PORT=8099
 
 # ---------- DataX ----------
 # local=本地执行  docker=Docker容器执行
-DATAX_MODE=local
+DATAX_MODE=docker
 
 # ---------- 加密密钥（16/24/32 字节）----------
-CRYPTO_KEY=DataNote_AES_Key
+# 加密密钥：必须自行生成，切勿使用固定值，也不要提交到仓库
+# 生成方法：LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32; echo
+CRYPTO_KEY=
 
 # ---------- Docker 网络 ----------
 NETWORK=datanote-net

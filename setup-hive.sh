@@ -21,7 +21,8 @@ if [ ! -f "$CONF_FILE" ]; then
 # DataNote 部署配置（两个脚本共享）
 MYSQL_HOST=127.0.0.1
 MYSQL_PORT=3306
-MYSQL_PASSWORD=root
+# MySQL 口令：首次部署请自行填写，不要留空也不要用弱口令
+MYSQL_PASSWORD=
 HIVE_PORT=10800
 HDFS_WEB_PORT=9870
 DATANOTE_PORT=8099
@@ -30,6 +31,8 @@ CONF
 fi
 
 source "$CONF_FILE"
+
+MYSQL_JDBC_UTF8_PARAMS="createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&useSSL=false&allowPublicKeyRetrieval=true"
 
 # ---------- 颜色输出 ----------
 GREEN='\033[0;32m'
@@ -167,6 +170,23 @@ wait_for() {
   return 1
 }
 
+ensure_metastore_utf8() {
+  # Hive 3 的 MySQL metastore schema 里部分注释列可能是 latin1_bin。
+  # 如果不修正，中文 COMMENT 写入后会变成永久的问号字节，数据地图无法恢复。
+  if ! docker ps -a --format '{{.Names}}' | grep -q datanote-mysql; then
+    warn "未检测到 datanote-mysql 容器，跳过 Metastore UTF-8 兜底修复"
+    return 0
+  fi
+
+  docker exec datanote-mysql mysql -uroot -p"$MYSQL_PASSWORD" --default-character-set=utf8mb4 -e "\
+ALTER TABLE hive_metastore.COLUMNS_V2 MODIFY COLUMN \`COMMENT\` VARCHAR(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; \
+ALTER TABLE hive_metastore.PARTITION_KEYS MODIFY COLUMN PKEY_COMMENT VARCHAR(4000) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; \
+ALTER TABLE hive_metastore.TABLE_PARAMS MODIFY COLUMN PARAM_VALUE MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; \
+ALTER TABLE hive_metastore.DBS MODIFY COLUMN \`DESC\` VARCHAR(4000) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" \
+    >/dev/null 2>&1 && info "Metastore 中文注释字段已确认 utf8mb4" \
+    || warn "Metastore UTF-8 兜底修复跳过或失败（首次初始化前可忽略）"
+}
+
 # ==================== 1. MySQL ====================
 if [ "$SKIP_MYSQL" = "true" ]; then
   info "使用本地 MySQL（端口 ${MYSQL_PORT}）"
@@ -191,6 +211,15 @@ else
 
   echo -n "等待 MySQL 启动"
   wait_for "MySQL" "docker exec datanote-mysql mysqladmin ping -h localhost -p$MYSQL_PASSWORD" 20
+fi
+
+# Metastore 连接的 MySQL：Docker 内走容器网络（mysql:3306），本地走 host.docker.internal:实际端口
+if [ "$SKIP_MYSQL" = "true" ]; then
+  METASTORE_MYSQL_HOST="host.docker.internal"
+  METASTORE_MYSQL_PORT="${MYSQL_PORT}"
+else
+  METASTORE_MYSQL_HOST="mysql"
+  METASTORE_MYSQL_PORT="3306"  # 容器内部端口固定 3306
 fi
 
 # ==================== 2. HDFS NameNode ====================
@@ -267,15 +296,6 @@ docker exec datanote-namenode hdfs dfs -chmod -R 777 /tmp/hive 2>/dev/null || tr
 if docker ps -a --format '{{.Names}}' | grep -q datanote-metastore; then
   info "Hive Metastore 已存在，跳过"
 else
-  # Metastore 连接的 MySQL：Docker 内走容器网络（mysql:3306），本地走 host.docker.internal:实际端口
-  if [ "$SKIP_MYSQL" = "true" ]; then
-    METASTORE_MYSQL_HOST="host.docker.internal"
-    METASTORE_MYSQL_PORT="${MYSQL_PORT}"
-  else
-    METASTORE_MYSQL_HOST="mysql"
-    METASTORE_MYSQL_PORT="3306"  # 容器内部端口固定 3306
-  fi
-
   # 初始化 Metastore schema（首次必须）。
   # 镜像入口在 IS_RESUME=true 时会跳过 schematool，若 MySQL 里没有建表，
   # metastore 启动会报 "Version information not found in metastore." 并无限重启。
@@ -288,7 +308,7 @@ else
     --entrypoint /opt/hive/bin/schematool \
     apache/hive:3.1.3 \
     -dbType mysql -initSchema \
-    -url "jdbc:mysql://${METASTORE_MYSQL_HOST}:${METASTORE_MYSQL_PORT}/hive_metastore?createDatabaseIfNotExist=true&useSSL=false" \
+    -url "jdbc:mysql://${METASTORE_MYSQL_HOST}:${METASTORE_MYSQL_PORT}/hive_metastore?${MYSQL_JDBC_UTF8_PARAMS}" \
     -driver com.mysql.cj.jdbc.Driver -userName root -passWord "$MYSQL_PASSWORD" 2>&1) || true
   if echo "$SCHEMA_LOG" | grep -qi 'schemaTool completed'; then
     info "Metastore schema 初始化完成"
@@ -311,7 +331,7 @@ else
     -e IS_RESUME=true \
     -e HIVE_CUSTOM_CONF_DIR=/opt/custom-conf \
     -e SERVICE_OPTS="\
--Djavax.jdo.option.ConnectionURL=jdbc:mysql://${METASTORE_MYSQL_HOST}:${METASTORE_MYSQL_PORT}/hive_metastore?createDatabaseIfNotExist=true&useSSL=false \
+-Djavax.jdo.option.ConnectionURL=jdbc:mysql://${METASTORE_MYSQL_HOST}:${METASTORE_MYSQL_PORT}/hive_metastore?${MYSQL_JDBC_UTF8_PARAMS} \
 -Djavax.jdo.option.ConnectionDriverName=com.mysql.cj.jdbc.Driver \
 -Djavax.jdo.option.ConnectionUserName=root \
 -Djavax.jdo.option.ConnectionPassword=$MYSQL_PASSWORD" \
@@ -325,6 +345,8 @@ else
   sleep 15
   info "Hive Metastore 已启动"
 fi
+
+ensure_metastore_utf8
 
 # ==================== 5. HiveServer2 ====================
 if docker ps -a --format '{{.Names}}' | grep -q datanote-hiveserver2; then

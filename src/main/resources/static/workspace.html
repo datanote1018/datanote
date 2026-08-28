@@ -19,8 +19,8 @@
   --bg-editor: #ffffff;
   --bg-dark: #ffffff;
   --bg-hover: #fafafc;
-  --border: #e0e0e6;
-  --divider: #efeff5;
+  --border: #eaebf0;
+  --divider: #f3f4f8;
   --text-primary: rgb(31,34,37);
   --text-regular: rgb(51,54,57);
   --text-muted: rgb(118,124,130);
@@ -62,21 +62,28 @@ html, body {
   display: flex;
   gap: 0;
   height: 100%;
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 0;              /* 关键：允许容器缩到内容以下，避免把右侧挤出/裁掉末尾标签 */
+  overflow-x: auto;          /* 万一仍放不下，横向滚动而不是裁掉 */
+  overflow-y: hidden;
+  scrollbar-width: none;     /* Firefox 隐藏滚动条 */
+  -ms-overflow-style: none;
 }
+.header-tabs::-webkit-scrollbar { display: none; }  /* Chrome/Safari 隐藏滚动条 */
 .header-tab {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 20px;
+  padding: 0 14px;           /* 收紧内边距，让更多屏一屏放下全部标签 */
   height: 100%;
   font-size: 14px;
   color: var(--text-regular);
   text-decoration: none;
   border-bottom: 2px solid transparent;
-  transition: all .2s;
+  transition: color .2s, background .2s, border-color .2s;  /* 只过渡颜色，别过渡布局，避免首帧动画抖动 */
   cursor: pointer;
   white-space: nowrap;
+  flex-shrink: 0;            /* 标签本身不压缩，宽度稳定 */
 }
 .header-tab:hover {
   color: var(--primary);
@@ -106,6 +113,20 @@ html, body {
   background: rgba(82,196,26,.1);
   color: var(--success);
   font-weight: 500;
+}
+.pending-ver-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(250,173,20,.12);
+  color: #d46b08;
+  border: 1px solid rgba(250,173,20,.3);
+  white-space: nowrap;
+  cursor: default;
+  vertical-align: middle;
 }
 .user-btn {
   width: 30px; height: 30px;
@@ -1730,6 +1751,8 @@ html, body {
 /* 探查高亮 */
 .dm-null-high { color: #ef4444; font-weight: 600; }
 .dm-null-ok { color: var(--success); font-weight: 500; }
+.dm-spinner { width:36px;height:36px;border:3px solid var(--border);border-top-color:#1677ff;border-radius:50%;animation:dm-spin .8s linear infinite; }
+@keyframes dm-spin { to { transform:rotate(360deg); } }
 /* 数据库和数字徽章 */
 .dm-db-badge {
   display: inline-flex;
@@ -2952,6 +2975,101 @@ html, body {
   .module-grid { grid-template-columns: 1fr; }
   .setting-grid { grid-template-columns: 1fr; }
 }
+
+/* =====================================================================
+   系统管理页现代化改造（作用域限定 #viewSettings，不影响其它页面）
+   设计取向：大圆角 · 大留白 · 弱边框 · 卡片浮层 · 14px 基础字号
+   ===================================================================== */
+#viewSettings { --sv-radius: 10px; --sv-bg: #f6f7f9; --sv-card-border: #edeff2; font-size: 14px; }
+/* 布局健壮性：占满中间区、防裁切、防左移（清除可能残留的运行时偏移） */
+#viewSettings { width: 100%; min-width: 0; transform: none; margin: 0; }
+#viewSettings .ops-layout {
+  background: var(--sv-bg); width: 100%; min-width: 0; margin: 0;
+  transform: none; overflow: hidden;
+  /* 直接锁定视口高度（减去 48px 顶部导航），不依赖 flex 链传导，彻底防塌陷 */
+  flex: 1; min-height: 0;
+  height: calc(100vh - 48px);
+}
+/* 侧栏与主区都强制撑满 ops-layout 全高 → 白/灰分界通栏到底，不随内容变 */
+#viewSettings .ops-sidebar { position: relative; left: 0; margin-left: 0; height: 100%; overflow-y: auto; }
+#viewSettings .ops-main { min-width: 0; height: 100%; overflow-y: auto; min-height: 0; }
+
+/* 侧边导航：加宽 + 圆角块选中态 · 去掉右竖线，靠"白侧栏 vs 浅灰主区"色差分区 */
+#viewSettings .ops-sidebar {
+  width: 210px; background: #fff; border-right: none;
+  padding: 16px 12px;
+}
+#viewSettings .ops-sidebar-item {
+  border-left: none; border-radius: var(--sv-radius);
+  padding: 10px 14px; margin-bottom: 4px; font-size: 14px; color: #5a6169;
+  transition: all .15s;
+}
+#viewSettings .ops-sidebar-item:hover { background: #f2f4f7; color: var(--text-primary); }
+#viewSettings .ops-sidebar-item.active {
+  background: var(--primary-light); color: var(--primary); font-weight: 600;
+}
+
+/* 内容区：浅灰背景，充足外边距 */
+#viewSettings .ops-main { background: var(--sv-bg); padding: 24px 28px; }
+
+/* 每个面板 = 浮在浅灰底上的白色圆角卡片 */
+#viewSettings .ops-dashboard {
+  background: #fff; border: 1px solid var(--sv-card-border);
+  border-radius: 14px; padding: 26px 30px;
+  box-shadow: 0 1px 3px rgba(20,30,50,.04);
+}
+
+/* 面板标题层级拉开 */
+#viewSettings .ops-dashboard h2 { font-size: 17px !important; font-weight: 600; color: #1d2129; }
+
+/* 按钮：大圆角、舒适高度 */
+#viewSettings .btn {
+  border-radius: var(--sv-radius); border-color: #dcdfe4; font-size: 13px;
+  height: 34px; padding: 0 16px; transition: all .15s;
+}
+#viewSettings .btn:hover { border-color: var(--primary); }
+#viewSettings .btn-sm { height: 32px; padding: 0 14px; }
+#viewSettings .btn-primary {
+  border-color: var(--primary); box-shadow: 0 2px 6px rgba(24,144,255,.22);
+}
+#viewSettings .btn-primary:hover { box-shadow: 0 3px 10px rgba(24,144,255,.3); }
+
+/* 输入 / 下拉：大圆角、14px、更高（覆盖内联样式） */
+#viewSettings input, #viewSettings select {
+  border-radius: var(--sv-radius) !important; height: 38px !important;
+  font-size: 14px !important; border-color: #dcdfe4 !important;
+  transition: border-color .15s, box-shadow .15s;
+}
+#viewSettings input:focus, #viewSettings select:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+#viewSettings .ds-form-row { margin-bottom: 16px; }
+#viewSettings .ds-form-row label { font-size: 14px; width: 92px; color: #5a6169; }
+
+/* 表格：留白行高 + 淡灰表头 + 悬停高亮（覆盖 JS 内联 padding:9px） */
+#viewSettings table { font-size: 14px !important; }
+#viewSettings table thead th {
+  padding: 12px 16px !important; font-size: 13px !important; color: #8a9099 !important;
+  font-weight: 500 !important; background: #fafbfc; border-bottom: 1px solid var(--sv-card-border);
+}
+#viewSettings table tbody td {
+  padding: 14px 16px !important; border-top: 1px solid #f2f4f6 !important;
+}
+#viewSettings table tbody tr { transition: background .12s; }
+#viewSettings table tbody tr:hover { background: #fafbfc; }
+
+/* 卡片内区块小标题 */
+#viewSettings .ops-dashboard [style*="font-weight:600"] { letter-spacing: .2px; }
+
+/* 主题设计两列：与新风格圆角/边框对齐 */
+#viewSettings #subjL1List, #viewSettings #subjL2List { max-height: 480px; }
+#viewSettings .ops-dashboard > div > div[style*="border:1px solid"] { border-color: var(--sv-card-border) !important; border-radius: 12px !important; }
+
+/* 滚动条收细 */
+#viewSettings ::-webkit-scrollbar { width: 8px; height: 8px; }
+#viewSettings ::-webkit-scrollbar-thumb { background: #dfe2e6; border-radius: 4px; }
+#viewSettings ::-webkit-scrollbar-thumb:hover { background: #c9ccd1; }
 </style>
 <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://unpkg.com/monaco-editor@0.45.0/min/vs/editor/editor.main.css">
 </head>
@@ -2996,10 +3114,19 @@ html, body {
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M13.4 10a5.8 5.8 0 00.5-2 5.8 5.8 0 00-.5-2l1.5-1.2a.4.4 0 00.1-.5l-1.4-2.4a.4.4 0 00-.5-.2L11.2 2.6a5.5 5.5 0 00-1.7-1L9.2.4a.4.4 0 00-.4-.4H6.2a.4.4 0 00-.4.3L5.5 1.6a5.5 5.5 0 00-1.7 1L2 1.7a.4.4 0 00-.5.2L.1 4.3a.4.4 0 00.1.5L1.6 6a5.8 5.8 0 000 4L.2 11.2a.4.4 0 00-.1.5l1.4 2.4a.4.4 0 00.5.2l1.9-.9a5.5 5.5 0 001.7 1l.3 1.3a.4.4 0 00.4.3h2.8a.4.4 0 00.4-.3l.3-1.3a5.5 5.5 0 001.7-1l1.9.9a.4.4 0 00.5-.2l1.4-2.4a.4.4 0 00-.1-.5z"/></svg>
       系统管理
     </a>
+    <a class="header-tab" href="#/requirement" data-route="requirement">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2h7l3 3v9H3V2z"/><path d="M9.5 2v3H13"/><path d="M5.5 8h5M5.5 11h3.5"/></svg>
+      需求管理
+    </a>
+    <a class="header-tab" href="#/ai" data-route="ai">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5l1.6 3.4 3.7.4-2.8 2.5.8 3.6L8 9.9 4.7 11.9l.8-3.6L2.7 5.8l3.7-.4z"/></svg>
+      AI智能
+    </a>
   </nav>
   <div class="header-right">
     <span class="env-badge">本地环境</span>
-    <div class="user-btn">A</div>
+    <span id="userNick" style="font-size:13px;color:var(--text-regular);margin-right:2px;"></span>
+    <div class="user-btn" id="userBtn" onclick="doLogout()" title="退出登录" style="cursor:pointer;">A</div>
   </div>
 </div>
 
@@ -3057,36 +3184,12 @@ html, body {
           <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 12V5M4 8l3-3 3 3"/><path d="M2 2h10"/></svg>
           上线
         </button>
-        <div class="tool-sep"></div>
-        <button class="tool-btn" onclick="toggleAiPanel()" title="AI 助手 (NL2SQL / SQL解释 / 优化)">
-          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5.5"/><path d="M5 6.5c0-.8.9-1.5 2-1.5s2 .7 2 1.5c0 .8-.9 1.5-2 1.5V9"/><circle cx="7" cy="10.5" r=".5" fill="currentColor"/></svg>
-          AI 助手
-        </button>
+        <span id="pendingVerBadge" class="pending-ver-badge" style="display:none;">
+          <svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="5.5" width="8" height="5.5" rx="1"/><path d="M4 5.5V4a2 2 0 014 0v1.5"/></svg>
+          有未上线版本
+        </span>
       </div>
 
-      <!-- AI 助手面板 -->
-      <div id="aiPanel" style="display:none;border-bottom:1px solid var(--border);background:var(--bg-card);max-height:280px;overflow:hidden;flex-shrink:0;">
-        <div style="display:flex;gap:8px;padding:8px 12px;align-items:flex-start;">
-          <div style="flex:1;display:flex;flex-direction:column;gap:6px;">
-            <div style="display:flex;gap:6px;">
-              <select id="aiMode" style="padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg-main);color:var(--text-primary);font-size:12px;">
-                <option value="chat">对话</option>
-                <option value="nl2sql">NL→SQL</option>
-                <option value="explain">SQL 解释</option>
-                <option value="optimize">SQL 优化</option>
-              </select>
-              <input type="text" id="aiInput" placeholder="输入问题，如：查询最近7天的订单量按天统计..."
-                style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg-main);color:var(--text-primary);font-size:12px;"
-                onkeydown="if(event.key==='Enter')sendAiRequest()">
-              <button class="btn btn-primary btn-sm" onclick="sendAiRequest()">发送</button>
-              <button class="btn btn-sm" onclick="toggleAiPanel()">关闭</button>
-            </div>
-            <div id="aiResponse" style="font-size:12px;color:var(--text-regular);max-height:200px;overflow-y:auto;line-height:1.6;padding:4px;">
-              <span style="color:var(--text-muted);">AI 助手就绪。选择模式后输入问题。</span>
-            </div>
-          </div>
-        </div>
-      </div>
       <!-- Editor -->
       <div class="editor-area">
         <div class="code-editor" id="monacoContainer" style="width:100%;height:100%;"></div>
@@ -3173,6 +3276,10 @@ html, body {
           <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 12V5M4 8l3-3 3 3"/><path d="M2 2h10"/></svg>
           上线
         </button>
+        <span id="syncPendingVerBadge" class="pending-ver-badge" style="display:none;">
+          <svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="5.5" width="8" height="5.5" rx="1"/><path d="M4 5.5V4a2 2 0 014 0v1.5"/></svg>
+          有未上线版本
+        </span>
       </div>
 
       <!-- Body -->
@@ -3761,19 +3868,71 @@ html, body {
     <div class="view-quality" id="viewSettings" style="display:none;">
       <div class="ops-layout">
         <div class="ops-sidebar">
-          <div class="ops-sidebar-item active" onclick="switchSettingsTab(this,'user')">用户管理</div>
+          <div class="ops-sidebar-item active" onclick="switchSettingsTab(this,'user');umLoadList()">用户管理</div>
+          <div class="ops-sidebar-item" onclick="switchSettingsTab(this,'subject')">主题设计</div>
           <div class="ops-sidebar-item" onclick="switchSettingsTab(this,'datasource')">数据源管理</div>
           <div class="ops-sidebar-item" onclick="switchSettingsTab(this,'env')">环境配置</div>
           <div class="ops-sidebar-item" onclick="switchSettingsTab(this,'security')">安全设置</div>
-          <div class="ops-sidebar-item" onclick="switchSettingsTab(this,'ai')">AI 配置</div>
+          <div class="ops-sidebar-item" onclick="switchSettingsTab(this,'ai');aiCfgLoad()">AI 配置</div>
+          <div class="ops-sidebar-item" onclick="switchSettingsTab(this,'prompt');promptLoad()">提示词管理</div>
           <div class="ops-sidebar-item" onclick="switchSettingsTab(this,'monitor')">系统监控</div>
         </div>
         <div class="ops-main">
           <div class="ops-dashboard" id="settingsUserPanel">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
               <h2 style="font-size:16px;font-weight:600;margin:0;">用户管理</h2>
+              <button class="btn btn-primary btn-sm" onclick="umShowCreate()">+ 新建用户</button>
             </div>
-            <div style="padding:24px;color:var(--text-muted);">管理平台用户、角色分配和操作权限</div>
+            <table style="width:100%;border-collapse:collapse;font-size:14px;">
+              <thead><tr style="color:var(--text-muted);text-align:left;">
+                <th style="padding:9px;font-weight:500;">用户名</th><th style="padding:9px;font-weight:500;">昵称</th>
+                <th style="padding:9px;font-weight:500;">角色</th><th style="padding:9px;font-weight:500;">状态</th>
+                <th style="padding:9px;font-weight:500;">创建时间</th><th style="padding:9px;font-weight:500;">操作</th>
+              </tr></thead>
+              <tbody id="umList"></tbody>
+            </table>
+            <div id="umModal" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.4);align-items:center;justify-content:center;">
+              <div style="background:#fff;border-radius:10px;padding:24px;width:360px;">
+                <div style="font-weight:600;font-size:16px;margin-bottom:16px;">新建用户</div>
+                <input id="umUsername" placeholder="用户名" style="width:100%;border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;font-size:14px;outline:none;margin-bottom:10px;">
+                <input id="umNickname" placeholder="昵称" style="width:100%;border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;font-size:14px;outline:none;margin-bottom:10px;">
+                <input id="umPassword" placeholder="密码（默认 123456）" style="width:100%;border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;font-size:14px;outline:none;margin-bottom:10px;">
+                <select id="umRole" style="width:100%;border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;font-size:14px;outline:none;margin-bottom:10px;">
+                  <option value="USER">普通用户</option><option value="ADMIN">管理员</option>
+                </select>
+                <div id="umMsg" style="font-size:12px;color:var(--error);min-height:14px;margin-bottom:8px;"></div>
+                <div style="display:flex;gap:10px;justify-content:flex-end;">
+                  <button class="btn" onclick="document.getElementById('umModal').style.display='none'">取消</button>
+                  <button class="btn btn-primary" onclick="umSave()">保存</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="ops-dashboard" id="settingsSubjectPanel" style="display:none;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <h2 style="font-size:16px;font-weight:600;margin:0;">主题设计</h2>
+            </div>
+            <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">
+              维护数据模型的主题域层级。此处配置的一级、二级主题会同步用于「新建SQL脚本」时的主题域选择。
+            </div>
+            <div style="display:flex;gap:16px;align-items:flex-start;">
+              <!-- 一级主题列 -->
+              <div style="flex:0 0 300px;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--bg-page,#fafafa);border-bottom:1px solid var(--border);">
+                  <span style="font-size:14px;font-weight:600;">一级主题</span>
+                  <button class="btn btn-primary btn-sm" onclick="subjAddL1()">+ 新建</button>
+                </div>
+                <div id="subjL1List" style="max-height:520px;overflow-y:auto;"></div>
+              </div>
+              <!-- 二级主题列 -->
+              <div style="flex:1;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--bg-page,#fafafa);border-bottom:1px solid var(--border);">
+                  <span style="font-size:14px;font-weight:600;" id="subjL2Title">二级主题</span>
+                  <button class="btn btn-primary btn-sm" id="subjAddL2Btn" onclick="subjAddL2()" style="display:none;">+ 新建</button>
+                </div>
+                <div id="subjL2List" style="max-height:520px;overflow-y:auto;"></div>
+              </div>
+            </div>
           </div>
           <div class="ops-dashboard" id="settingsDatasourcePanel" style="display:none;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
@@ -3824,19 +3983,136 @@ html, body {
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
               <h2 style="font-size:16px;font-weight:600;margin:0;">安全设置</h2>
             </div>
-            <div style="padding:24px;color:var(--text-muted);">登录策略、密码规则、操作日志和审计</div>
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:56px 20px;text-align:center;">
+              <div style="width:60px;height:60px;border-radius:16px;background:var(--primary-light);display:flex;align-items:center;justify-content:center;margin-bottom:16px;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5l8-3z"/><path d="M9 12l2 2 4-4"/></svg>
+              </div>
+              <div style="font-size:15px;font-weight:600;color:var(--text-primary);margin-bottom:6px;">安全设置</div>
+              <div style="font-size:13px;color:var(--text-muted);max-width:380px;line-height:1.7;">登录策略、密码规则、操作日志与审计 · 功能建设中</div>
+            </div>
           </div>
           <div class="ops-dashboard" id="settingsAiPanel" style="display:none;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
               <h2 style="font-size:16px;font-weight:600;margin:0;">AI 配置</h2>
+              <button class="btn btn-primary btn-sm" onclick="aiCfgShowCreate()">+ 新增</button>
             </div>
-            <div style="padding:24px;"><button class="btn btn-primary btn-sm" onclick="openAiConfig()">打开 AI 配置</button></div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">可配置多套模型，被设为「默认」的那套会被 AI 服务使用。</div>
+            <table style="width:100%;border-collapse:collapse;font-size:14px;">
+              <thead><tr style="color:var(--text-muted);text-align:left;">
+                <th style="padding:9px;font-weight:500;">名称</th><th style="padding:9px;font-weight:500;">Provider</th>
+                <th style="padding:9px;font-weight:500;">模型</th><th style="padding:9px;font-weight:500;">API Key</th>
+                <th style="padding:9px;font-weight:500;">状态</th><th style="padding:9px;font-weight:500;">操作</th>
+              </tr></thead>
+              <tbody id="aiCfgList"></tbody>
+            </table>
+            <div id="aiCfgModal" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.4);align-items:center;justify-content:center;">
+              <div style="background:#fff;border-radius:10px;padding:24px;width:420px;">
+                <div id="aiCfgModalTitle" style="font-weight:600;font-size:16px;margin-bottom:16px;">新增 AI 配置</div>
+                <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:3px;">名称</label>
+                <input id="aiCfgName" placeholder="如：通义千问" style="width:100%;border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-size:14px;outline:none;margin-bottom:10px;">
+                <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:3px;">Provider</label>
+                <select id="aiCfgProviderSel" onchange="aiCfgOnProvider()" style="width:100%;border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-size:14px;outline:none;margin-bottom:10px;">
+                  <option value="bailian">百炼（通义千问）</option>
+                  <option value="anthropic">Anthropic（Claude）</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="deepseek">DeepSeek</option>
+                  <option value="custom">自定义</option>
+                </select>
+                <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:3px;">Base URL</label>
+                <input id="aiCfgBase" placeholder="https://dashscope.aliyuncs.com/compatible-mode" style="width:100%;border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-size:14px;outline:none;margin-bottom:2px;">
+                <div style="font-size:11px;color:var(--warning);margin-bottom:8px;">百炼填到 compatible-mode 即可，<b>不要带 /v1</b>（系统自动补）</div>
+                <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:3px;">模型</label>
+                <input id="aiCfgModelInput" placeholder="qwen-plus" style="width:100%;border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-size:14px;outline:none;margin-bottom:10px;">
+                <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:3px;">API Key</label>
+                <div style="border:1px dashed var(--border);border-radius:var(--radius);padding:8px 12px;font-size:13px;color:var(--text-muted);background:var(--bg-hover);margin-bottom:8px;line-height:1.6;">
+                  请在 <code style="color:var(--text-regular);">ai-service/.env</code> 中配置<br>
+                  <span style="font-size:11px;">设置 <code>QWEN_API_KEY=你的密钥</code> 后重启服务生效；此处不再存储密钥</span>
+                </div>
+                <div id="aiCfgMsg" style="font-size:12px;min-height:16px;margin-bottom:8px;"></div>
+                <div style="display:flex;gap:8px;justify-content:flex-end;">
+                  <button class="btn btn-sm" onclick="aiCfgTest()">测试连接</button>
+                  <button class="btn btn-sm" onclick="document.getElementById('aiCfgModal').style.display='none'">取消</button>
+                  <button class="btn btn-primary btn-sm" onclick="aiCfgSave()">保存</button>
+                </div>
+              </div>
+            </div>
           </div>
+          <!-- 提示词管理面板 -->
+          <div class="ops-dashboard" id="settingsPromptPanel" style="display:none;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <h2 style="font-size:16px;font-weight:600;margin:0;">提示词管理</h2>
+              <button class="btn btn-primary btn-sm" onclick="promptShowCreate()">+ 新建</button>
+            </div>
+            <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">
+              管理各 Agent 的系统提示词，AI 服务运行时实时读取此处配置，无需重启服务。
+            </div>
+            <div style="display:flex;gap:16px;align-items:flex-start;">
+              <!-- 左列：提示词列表 -->
+              <div style="flex:0 0 240px;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+                <div style="padding:10px 14px;background:var(--bg-page,#fafafa);border-bottom:1px solid var(--border);font-size:14px;font-weight:600;">提示词列表</div>
+                <div id="promptList" style="max-height:560px;overflow-y:auto;"></div>
+              </div>
+              <!-- 右列：编辑器 -->
+              <div style="flex:1;border:1px solid var(--border);border-radius:8px;overflow:hidden;" id="promptEditorBox">
+                <div style="padding:10px 14px;background:var(--bg-page,#fafafa);border-bottom:1px solid var(--border);font-size:14px;font-weight:600;" id="promptEditorTitle">请选择一个提示词</div>
+                <div style="padding:16px;display:none;" id="promptEditorBody">
+                  <div style="display:flex;gap:12px;margin-bottom:10px;">
+                    <div style="flex:1;">
+                      <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:3px;">名称</label>
+                      <input id="promptEditName" placeholder="如：需求分析 Agent" style="width:100%;border:1px solid var(--border);border-radius:var(--radius);padding:7px 10px;font-size:14px;outline:none;">
+                    </div>
+                    <div style="flex:1;">
+                      <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:3px;">标识符 (code)</label>
+                      <input id="promptEditCode" placeholder="如：requirement_analyst" style="width:100%;border:1px solid var(--border);border-radius:var(--radius);padding:7px 10px;font-size:14px;outline:none;">
+                    </div>
+                  </div>
+                  <div style="margin-bottom:10px;">
+                    <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:3px;">用途说明</label>
+                    <input id="promptEditDesc" placeholder="简述此提示词的用途" style="width:100%;border:1px solid var(--border);border-radius:var(--radius);padding:7px 10px;font-size:14px;outline:none;">
+                  </div>
+                  <div style="margin-bottom:12px;">
+                    <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:3px;">提示词内容</label>
+                    <textarea id="promptEditContent" rows="22" placeholder="输入系统提示词…" style="width:100%;border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;font-size:13px;outline:none;resize:vertical;font-family:monospace;line-height:1.7;box-sizing:border-box;"></textarea>
+                  </div>
+                  <div style="display:flex;gap:8px;align-items:center;">
+                    <button class="btn btn-primary btn-sm" onclick="promptSave()">保存</button>
+                    <button class="btn btn-sm" onclick="promptDelete()" style="color:var(--error);border-color:var(--error);">删除</button>
+                    <span id="promptMsg" style="font-size:12px;color:var(--text-muted);margin-left:6px;"></span>
+                  </div>
+                </div>
+                <div id="promptEditorEmpty" style="padding:56px 20px;text-align:center;color:var(--text-muted);font-size:13px;">← 从左侧选择一个提示词进行编辑</div>
+              </div>
+            </div>
+            <!-- 新建弹窗 -->
+            <div id="promptCreateModal" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.4);align-items:center;justify-content:center;">
+              <div style="background:#fff;border-radius:10px;padding:24px;width:400px;">
+                <div style="font-weight:600;font-size:16px;margin-bottom:14px;">新建提示词</div>
+                <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:3px;">名称</label>
+                <input id="promptNewName" placeholder="如：取数 Agent" style="width:100%;border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-size:14px;outline:none;margin-bottom:10px;">
+                <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:3px;">标识符 (code)</label>
+                <input id="promptNewCode" placeholder="小写字母+下划线，如 data_query_agent" style="width:100%;border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-size:14px;outline:none;margin-bottom:10px;">
+                <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:3px;">用途说明</label>
+                <input id="promptNewDesc" placeholder="可选" style="width:100%;border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-size:14px;outline:none;margin-bottom:10px;">
+                <div id="promptCreateMsg" style="font-size:12px;color:var(--error);min-height:14px;margin-bottom:8px;"></div>
+                <div style="display:flex;gap:8px;justify-content:flex-end;">
+                  <button class="btn btn-sm" onclick="document.getElementById('promptCreateModal').style.display='none'">取消</button>
+                  <button class="btn btn-primary btn-sm" onclick="promptCreate()">创建</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="ops-dashboard" id="settingsMonitorPanel" style="display:none;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
               <h2 style="font-size:16px;font-weight:600;margin:0;">系统监控</h2>
             </div>
-            <div style="padding:24px;color:var(--text-muted);">CPU、内存、磁盘使用率监控和服务健康检查</div>
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:56px 20px;text-align:center;">
+              <div style="width:60px;height:60px;border-radius:16px;background:var(--primary-light);display:flex;align-items:center;justify-content:center;margin-bottom:16px;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
+              </div>
+              <div style="font-size:15px;font-weight:600;color:var(--text-primary);margin-bottom:6px;">系统监控</div>
+              <div style="font-size:13px;color:var(--text-muted);max-width:380px;line-height:1.7;">CPU、内存、磁盘使用率监控与服务健康检查 · 功能建设中</div>
+            </div>
           </div>
         </div>
       </div>
@@ -4195,7 +4471,7 @@ html, body {
 <!-- AI Script Name Modal -->
 <div id="aiScriptNameModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:10000;align-items:center;justify-content:center;">
   <div style="background:var(--bg-card);border-radius:8px;padding:24px;width:480px;">
-    <div style="font-size:15px;font-weight:600;margin-bottom:16px;">新建模型</div>
+    <div style="font-size:15px;font-weight:600;margin-bottom:16px;">新建SQL脚本</div>
     <div style="display:flex;flex-direction:column;gap:12px;">
       <div style="display:flex;align-items:center;gap:8px;">
         <label style="width:80px;font-size:13px;color:var(--text-regular);flex-shrink:0;">表类型</label>
@@ -4239,6 +4515,1068 @@ html, body {
 <!-- ===== Page Views (full-page routes, hidden by default) ===== -->
 
 <!-- Home Page -->
+<!-- ===== 需求管理（取数需求工作项系统 · 参考 Meego） ===== -->
+<style>
+  .req-viewtabs{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+  .req-viewtab{border:none;background:var(--bg-card);color:var(--text-regular);padding:6px 16px;font-size:13px;cursor:pointer;}
+  .req-viewtab.active{background:var(--primary);color:#fff;}
+  .req-table{width:100%;border-collapse:collapse;font-size:14px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;}
+  .req-table th{text-align:left;color:var(--text-muted);font-weight:500;padding:11px 14px;border-bottom:1px solid var(--divider);background:var(--bg-body);}
+  .req-table td{padding:11px 14px;border-bottom:1px solid var(--divider);color:var(--text-regular);}
+  .req-table tbody tr{cursor:pointer;}
+  .req-table tbody tr:hover{background:var(--bg-body);}
+  .req-badge{display:inline-block;padding:2px 10px;border-radius:11px;font-size:12px;font-weight:500;line-height:18px;}
+  .req-pri-高{color:#e74c3c;} .req-pri-中{color:#e6912b;} .req-pri-低{color:#3498db;}
+  .req-kanban{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;align-items:flex-start;}
+  .req-kcol{flex:0 0 260px;background:var(--bg-body);border:1px solid var(--border);border-radius:var(--radius-lg);display:flex;flex-direction:column;max-height:calc(100vh - 220px);}
+  .req-kcol-head{padding:10px 12px;font-weight:600;font-size:13px;border-bottom:1px solid var(--divider);display:flex;align-items:center;gap:6px;position:sticky;top:0;}
+  .req-kcol-body{padding:10px;overflow-y:auto;flex:1;min-height:60px;display:flex;flex-direction:column;gap:8px;}
+  .req-kcol-body.dragover{background:rgba(64,128,255,.08);outline:2px dashed var(--primary);outline-offset:-4px;}
+  .req-card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer;box-shadow:var(--shadow);}
+  .req-card:hover{border-color:var(--primary);}
+  .req-card-title{font-weight:600;font-size:13px;color:var(--text-primary);margin-bottom:6px;line-height:1.4;}
+  .req-card-meta{font-size:11px;color:var(--text-muted);display:flex;gap:8px;flex-wrap:wrap;}
+  .req-detail-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px;margin-bottom:14px;box-shadow:var(--shadow);}
+  .req-detail-card h4{margin:0 0 10px;font-size:14px;color:var(--text-primary);display:flex;align-items:center;gap:8px;}
+  .req-log-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px dashed var(--divider);font-size:13px;}
+  .req-log-item:last-child{border-bottom:none;}
+</style>
+<div id="viewRequirement" class="page-view" style="display:none">
+  <!-- 列表/看板容器 -->
+  <div id="reqBoard" style="max-width:1240px;margin:0 auto;padding:20px;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+      <div class="section-title" style="margin:0;">需求管理 · 取数工作项</div>
+      <div style="margin-left:auto;display:flex;gap:10px;align-items:center;">
+        <div class="req-viewtabs">
+          <button id="reqTabList" class="req-viewtab active" onclick="reqSwitchView('list')">列表</button>
+          <button id="reqTabKanban" class="req-viewtab" onclick="reqSwitchView('kanban')">看板</button>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="reqOpenCreate()">+ 新建需求</button>
+      </div>
+    </div>
+    <!-- 筛选栏 -->
+    <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+      <input id="reqSearch" placeholder="搜索标题 / 描述…" oninput="reqRender()" style="flex:1;min-width:200px;border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-size:14px;outline:none;">
+      <select id="reqFilterStatus" onchange="reqRender()" style="border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-size:14px;outline:none;"><option value="">全部状态</option></select>
+      <select id="reqFilterPriority" onchange="reqRender()" style="border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-size:14px;outline:none;"><option value="">全部优先级</option><option>高</option><option>中</option><option>低</option></select>
+      <input id="reqFilterDomain" placeholder="业务域" oninput="reqRender()" style="width:120px;border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-size:14px;outline:none;">
+      <button class="btn btn-sm" onclick="reqLoad()">刷新</button>
+    </div>
+    <!-- 列表视图 -->
+    <div id="reqListView">
+      <table class="req-table">
+        <thead><tr>
+          <th>标题</th><th>业务域</th><th>提出人</th><th>处理人</th><th>优先级</th><th>状态</th><th>更新时间</th><th></th>
+        </tr></thead>
+        <tbody id="reqListBody"></tbody>
+      </table>
+      <div id="reqListEmpty" style="display:none;text-align:center;color:var(--text-muted);padding:48px;">暂无需求，点右上角「+ 新建需求」创建第一条取数需求。</div>
+    </div>
+    <!-- 看板视图 -->
+    <div id="reqKanbanView" style="display:none;">
+      <div id="reqKanbanCols" class="req-kanban"></div>
+    </div>
+  </div>
+
+  <!-- 详情视图 -->
+  <div id="reqDetail" style="display:none;max-width:1120px;margin:0 auto;padding:20px;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+      <button class="btn btn-sm" onclick="reqCloseDetail()">← 返回列表</button>
+      <div id="reqDetailTitle" style="font-size:18px;font-weight:600;color:var(--text-primary);"></div>
+      <span id="reqDetailStatus" class="req-badge"></span>
+      <div id="reqDetailOps" style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;"></div>
+    </div>
+    <div style="display:flex;gap:16px;align-items:flex-start;">
+      <!-- 左列：描述 + AI 澄清对话 -->
+      <div style="flex:1;min-width:0;">
+        <div class="req-detail-card">
+          <h4>📝 需求描述（业务原话）</h4>
+          <div id="reqDetailDesc" style="font-size:13px;line-height:1.7;color:var(--text-regular);white-space:pre-wrap;"></div>
+          <div id="reqDetailMeta" style="margin-top:10px;font-size:12px;color:var(--text-muted);display:flex;gap:16px;flex-wrap:wrap;"></div>
+        </div>
+        <div class="req-detail-card" style="display:flex;flex-direction:column;height:460px;">
+          <h4 style="flex:0 0 auto;">💬 AI 澄清对话
+            <button class="btn btn-sm" style="margin-left:auto;" onclick="reqGenSpec()">📋 生成加工口径</button>
+          </h4>
+          <div id="reqMessages" style="flex:1;overflow-y:auto;padding:8px 2px;background:var(--bg-body);border-radius:var(--radius);min-height:0;"></div>
+          <div style="display:flex;gap:10px;padding-top:10px;">
+            <input id="reqInput" placeholder="向 AI 需求分析师描述/追问，回车发送…" onkeydown="if(event.key==='Enter')reqSend()" style="flex:1;border:1px solid var(--border);border-radius:20px;padding:9px 16px;outline:none;font-size:14px;">
+            <button class="btn btn-primary" onclick="reqSend()" style="border-radius:20px;padding:0 20px;">发送</button>
+          </div>
+        </div>
+      </div>
+      <!-- 右列：口径 / SQL / 核对 / 流转记录 -->
+      <div style="flex:1;min-width:0;">
+        <div class="req-detail-card">
+          <h4>📋 标准化需求（加工口径 + 建模建议）
+            <button id="reqSpecSaveBtn" class="btn btn-sm" style="margin-left:auto;display:none;" onclick="reqSaveSpec()">保存到需求</button>
+          </h4>
+          <div id="reqDetailSpec" style="font-size:13px;line-height:1.7;white-space:pre-wrap;color:var(--text-regular);">（尚未生成，去左侧和 AI 澄清后点「生成加工口径」）</div>
+        </div>
+        <div class="req-detail-card">
+          <h4>🗄 生成的 SQL + 出数结果
+            <button class="btn btn-sm" style="margin-left:auto;" onclick="reqRunQuery()">⚡ AI 取数</button>
+          </h4>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">SQL</div>
+          <pre id="reqDetailSql" style="background:var(--bg-body);border:1px solid var(--divider);border-radius:6px;padding:10px;font-size:12px;overflow:auto;max-height:180px;margin:0 0 10px;white-space:pre-wrap;">（无）</pre>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">结果摘要</div>
+          <div id="reqDetailResult" style="font-size:13px;color:var(--text-regular);white-space:pre-wrap;">（无）</div>
+        </div>
+        <div class="req-detail-card">
+          <h4>✅ 核对结论
+            <button class="btn btn-sm" style="margin-left:auto;" onclick="reqRunCheck()">🔍 AI 核对</button>
+          </h4>
+          <div id="reqDetailCheck" style="font-size:13px;color:var(--text-regular);white-space:pre-wrap;">（无）</div>
+        </div>
+        <div class="req-detail-card">
+          <h4>🕓 流转记录</h4>
+          <div id="reqDetailLog" style="font-size:13px;color:var(--text-regular);"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 新建需求弹窗（聊天式：和 AI 聊清楚 → 凝练成完善需求 → 创建） -->
+  <div id="reqCreateModal" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.45);align-items:center;justify-content:center;">
+    <div style="background:var(--bg-card);border-radius:12px;width:660px;height:82vh;display:flex;flex-direction:column;overflow:hidden;">
+      <div style="display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--divider);">
+        <div style="font-weight:600;font-size:16px;">新建取数需求</div>
+        <span id="reqDraftStep" style="margin-left:10px;font-size:12px;color:var(--text-muted);">和 AI 聊清楚你要什么数</span>
+        <button class="btn btn-sm" style="margin-left:auto;" onclick="reqCloseCreate()">关闭</button>
+      </div>
+
+      <!-- 步骤①：澄清对话 -->
+      <div id="reqDraftChat" style="flex:1;display:flex;flex-direction:column;min-height:0;">
+        <div id="reqDraftMsgs" style="flex:1;overflow-y:auto;padding:18px 20px;background:var(--bg-body);"></div>
+        <div style="padding:12px 20px;border-top:1px solid var(--divider);">
+          <div style="display:flex;gap:10px;">
+            <input id="reqDraftInput" placeholder="描述你的取数需求，回车发送…（AI 会追问口径/维度/时间等）" onkeydown="if(event.key==='Enter')reqDraftSend()" style="flex:1;border:1px solid var(--border);border-radius:20px;padding:10px 16px;outline:none;font-size:14px;">
+            <button class="btn btn-primary" onclick="reqDraftSend()" style="border-radius:20px;padding:0 20px;">发送</button>
+          </div>
+          <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="reqFinalize()">✅ 聊清楚了，生成完善需求 →</button>
+        </div>
+      </div>
+
+      <!-- 步骤②：AI 生成的完善需求（可改后创建） -->
+      <div id="reqDraftReview" style="display:none;flex:1;overflow-y:auto;padding:18px 20px;">
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">AI 已根据对话凝练出下面这条需求，确认或微调后即可创建：</div>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div><label style="font-size:13px;color:var(--text-muted);">需求标题</label><input id="reqRevTitle" style="width:100%;border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;font-size:14px;outline:none;margin-top:4px;"></div>
+          <div style="display:flex;gap:12px;">
+            <div style="flex:1;"><label style="font-size:13px;color:var(--text-muted);">业务域</label><input id="reqRevDomain" placeholder="授信/放款/风控…" style="width:100%;border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;font-size:14px;outline:none;margin-top:4px;"></div>
+            <div style="flex:1;"><label style="font-size:13px;color:var(--text-muted);">优先级</label><select id="reqRevPriority" style="width:100%;border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;font-size:14px;outline:none;margin-top:4px;"><option>中</option><option>高</option><option>低</option></select></div>
+          </div>
+          <div><label style="font-size:13px;color:var(--text-muted);">完善后的需求描述</label><textarea id="reqRevDesc" rows="6" style="width:100%;border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;font-size:14px;outline:none;margin-top:4px;resize:vertical;font-family:inherit;"></textarea></div>
+          <div>
+            <label style="font-size:13px;color:var(--text-muted);">AI 加工口径 + 建模建议（随需求一起保存）</label>
+            <div id="reqRevSpec" style="margin-top:4px;border:1px solid var(--divider);border-radius:var(--radius);padding:10px 12px;font-size:12px;line-height:1.7;white-space:pre-wrap;color:var(--text-regular);background:var(--bg-body);max-height:220px;overflow:auto;"></div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;gap:10px;margin-top:18px;">
+          <button class="btn" onclick="reqBackToChat()">← 返回继续聊</button>
+          <button class="btn btn-primary" onclick="reqConfirmCreate()">确认创建</button>
+        </div>
+      </div>
+
+      <div id="reqCreateMsg" style="font-size:12px;color:#e74c3c;padding:0 20px 12px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== AI 智能（知识库/RAG 管理 · 列表为主 + 弹窗操作） ===== -->
+<style>
+  .ai-modal-mask{display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.45);align-items:center;justify-content:center;}
+  .ai-modal{background:var(--bg-card);border-radius:12px;width:600px;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;}
+  .ai-modal-head{display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--divider);font-weight:600;font-size:16px;}
+  .ai-modal-body{padding:18px 20px;overflow-y:auto;}
+  .ai-modal-foot{display:flex;justify-content:flex-end;gap:10px;padding:14px 20px;border-top:1px solid var(--divider);}
+  .ai-inp{width:100%;border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;font-size:14px;outline:none;}
+  .ai-ver{border:1px solid var(--divider);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px;}
+  .ai-ver-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+</style>
+<div id="viewAI" class="page-view" style="display:none">
+  <div style="max-width:1000px;margin:0 auto;padding:20px;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+      <div class="section-title" style="margin:0;">AI 智能 · 知识库</div>
+      <div style="margin-left:auto;display:flex;gap:10px;">
+        <button class="btn btn-sm" onclick="aiOpenSearch()">🔍 语义检索</button>
+        <button class="btn btn-primary btn-sm" onclick="aiOpenImport()">+ 新建</button>
+      </div>
+    </div>
+
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;box-shadow:var(--shadow);">
+      <div style="display:flex;align-items:center;margin-bottom:12px;">
+        <div style="font-weight:600;color:var(--text-primary);">知识列表</div>
+        <button class="btn btn-sm" style="margin-left:auto;" onclick="aiLoadList()">刷新</button>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;">
+        <thead><tr style="color:var(--text-muted);text-align:left;">
+          <th style="padding:8px;font-weight:500;">标题</th><th style="padding:8px;font-weight:500;">更新时间</th><th style="padding:8px;font-weight:500;">条数</th><th style="padding:8px;font-weight:500;">版本</th><th style="padding:8px;font-weight:500;">状态</th><th style="padding:8px;font-weight:500;text-align:right;">操作</th>
+        </tr></thead>
+        <tbody id="aiList"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 弹窗：新建 -->
+  <div id="aiImportModal" class="ai-modal-mask">
+    <div class="ai-modal">
+      <div class="ai-modal-head">新建知识导入<button class="btn btn-sm" style="margin-left:auto;" onclick="aiClose('aiImportModal')">关闭</button></div>
+      <div class="ai-modal-body">
+        <label style="font-size:13px;color:var(--text-muted);">标题 / 备注</label>
+        <input id="aiNewTitle" class="ai-inp" placeholder="如：风控指标口径" style="margin:4px 0 12px;">
+        <label style="font-size:13px;color:var(--text-muted);">知识内容（每行一条，逐条向量化）</label>
+        <textarea id="aiNewTexts" class="ai-inp" placeholder="逾期率 = 逾期本金 / 放款本金&#10;MOB 指账龄月…" style="min-height:180px;margin-top:4px;resize:vertical;font-family:inherit;"></textarea>
+      </div>
+      <div class="ai-modal-foot">
+        <span id="aiImportMsg" style="margin-right:auto;font-size:12px;color:var(--text-muted);align-self:center;"></span>
+        <button class="btn" onclick="aiClose('aiImportModal')">取消</button>
+        <button class="btn btn-primary" onclick="aiImport()">导入并向量化</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 弹窗：更新 -->
+  <div id="aiUpdateModal" class="ai-modal-mask">
+    <div class="ai-modal">
+      <div class="ai-modal-head">更新知识<button class="btn btn-sm" style="margin-left:auto;" onclick="aiClose('aiUpdateModal')">关闭</button></div>
+      <div class="ai-modal-body">
+        <div style="font-size:12px;color:#e6912b;background:#fff3e0;padding:6px 12px;border-radius:8px;margin-bottom:12px;">提交后将<b>替换该条知识的全部内容</b>：旧向量删除、新内容重新向量化，并生成一个新版本 + AI 变更总结。</div>
+        <label style="font-size:13px;color:var(--text-muted);">标题 / 备注</label>
+        <input id="aiUpTitle" class="ai-inp" style="margin:4px 0 12px;">
+        <label style="font-size:13px;color:var(--text-muted);">新的知识内容（每行一条）</label>
+        <textarea id="aiUpTexts" class="ai-inp" style="min-height:180px;margin-top:4px;resize:vertical;font-family:inherit;"></textarea>
+      </div>
+      <div class="ai-modal-foot">
+        <span id="aiUpdateMsg" style="margin-right:auto;font-size:12px;color:var(--text-muted);align-self:center;"></span>
+        <button class="btn" onclick="aiClose('aiUpdateModal')">取消</button>
+        <button class="btn btn-primary" onclick="aiUpdate()">替换并重新向量化</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 弹窗：版本历史 -->
+  <div id="aiVersionModal" class="ai-modal-mask">
+    <div class="ai-modal" style="width:640px;">
+      <div class="ai-modal-head"><span id="aiVerTitle">版本历史</span><button class="btn btn-sm" style="margin-left:auto;" onclick="aiClose('aiVersionModal')">关闭</button></div>
+      <div class="ai-modal-body" id="aiVerBody"></div>
+    </div>
+  </div>
+
+  <!-- 弹窗：语义检索 -->
+  <div id="aiSearchModal" class="ai-modal-mask">
+    <div class="ai-modal">
+      <div class="ai-modal-head">语义检索测试<button class="btn btn-sm" style="margin-left:auto;" onclick="aiClose('aiSearchModal')">关闭</button></div>
+      <div class="ai-modal-body">
+        <div style="display:flex;gap:10px;">
+          <input id="aiQuery" class="ai-inp" placeholder="输入一句话，看能召回哪些知识" onkeydown="if(event.key==='Enter')aiSearch()">
+          <button class="btn btn-primary" onclick="aiSearch()" style="white-space:nowrap;">检索</button>
+        </div>
+        <div id="aiSearchResult" style="margin-top:12px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const REQ_API = 'http://localhost:8000';   // 需求管理 = 对话Agent服务
+  const AI_API  = 'http://localhost:8001';   // AI智能 = RAG管理服务
+  function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function fmt(ts){ return new Date(ts*1000).toLocaleString(); }
+
+  // ===== 需求工作项系统（列表 / 看板 / 详情） =====
+  var REQ_STATUS = [
+    {k:'clarifying', label:'澄清中', color:'#8a6d3b', bg:'#fcf3d9'},
+    {k:'reviewing',  label:'待评审', color:'#8250df', bg:'#f1e9ff'},
+    {k:'confirmed',  label:'已确认', color:'#0969da', bg:'#ddf4ff'},
+    {k:'querying',   label:'出数中', color:'#bf3989', bg:'#ffeff7'},
+    {k:'checking',   label:'核对中', color:'#9a6700', bg:'#fff8c5'},
+    {k:'delivered',  label:'已交付', color:'#1a7f37', bg:'#dafbe1'},
+    {k:'closed',     label:'已关闭', color:'#57606a', bg:'#eaeef2'},
+    {k:'rejected',   label:'已驳回', color:'#cf222e', bg:'#ffebe9'}
+  ];
+  var REQ_KANBAN_COLS = ['clarifying','reviewing','confirmed','querying','checking','delivered'];
+  function reqStatusMeta(k){ for(var i=0;i<REQ_STATUS.length;i++) if(REQ_STATUS[i].k===k) return REQ_STATUS[i]; return {k:k,label:k,color:'#57606a',bg:'#eaeef2'}; }
+  function reqBadge(k){ var m=reqStatusMeta(k); return '<span class="req-badge" style="color:'+m.color+';background:'+m.bg+';">'+m.label+'</span>'; }
+  function reqFmtTime(s){ if(!s) return '-'; return String(s).replace('T',' ').substring(0,16); }
+
+  var reqAll = [];         // 全部需求
+  var reqCur = null;       // 当前详情需求
+  var reqView = 'list';    // list | kanban
+  var reqStatusInited = false;
+  var reqSpecPending = null; // 刚生成、待保存的口径文本
+
+  window.reqInit = function(){
+    if(!reqStatusInited){
+      reqStatusInited = true;
+      var sel = document.getElementById('reqFilterStatus');
+      REQ_STATUS.forEach(function(s){ var o=document.createElement('option'); o.value=s.k; o.textContent=s.label; sel.appendChild(o); });
+    }
+    reqCloseDetail();
+    reqLoad();
+  };
+
+  window.reqLoad = async function(){
+    try{
+      var d = await (await fetch('/api/requirements')).json();
+      reqAll = (d && d.code===0 && d.data) ? d.data : [];
+    }catch(e){ reqAll = []; }
+    reqRender();
+  };
+
+  function reqFiltered(){
+    var kw = (document.getElementById('reqSearch').value||'').trim().toLowerCase();
+    var st = document.getElementById('reqFilterStatus').value;
+    var pr = document.getElementById('reqFilterPriority').value;
+    var dm = (document.getElementById('reqFilterDomain').value||'').trim();
+    return reqAll.filter(function(r){
+      if(st && r.status!==st) return false;
+      if(pr && r.priority!==pr) return false;
+      if(dm && (r.bizDomain||'').indexOf(dm)<0) return false;
+      if(kw){ var hay=((r.title||'')+' '+(r.description||'')).toLowerCase(); if(hay.indexOf(kw)<0) return false; }
+      return true;
+    });
+  }
+
+  window.reqRender = function(){
+    if(reqView==='list') reqRenderList(); else reqRenderKanban();
+  };
+
+  window.reqSwitchView = function(mode){
+    reqView = mode;
+    document.getElementById('reqTabList').classList.toggle('active', mode==='list');
+    document.getElementById('reqTabKanban').classList.toggle('active', mode==='kanban');
+    document.getElementById('reqListView').style.display = mode==='list'?'':'none';
+    document.getElementById('reqKanbanView').style.display = mode==='kanban'?'':'none';
+    reqRender();
+  };
+
+  function reqRenderList(){
+    var rows = reqFiltered();
+    var tb = document.getElementById('reqListBody');
+    document.getElementById('reqListEmpty').style.display = rows.length?'none':'block';
+    tb.innerHTML = rows.map(function(r){
+      return '<tr onclick="reqOpenDetail('+r.id+')">'+
+        '<td style="font-weight:500;color:var(--text-primary);">'+esc(r.title)+'</td>'+
+        '<td>'+esc(r.bizDomain||'-')+'</td>'+
+        '<td>'+esc(r.submitterName||'-')+'</td>'+
+        '<td>'+esc(r.assigneeName||'-')+'</td>'+
+        '<td class="req-pri-'+esc(r.priority||'中')+'">'+esc(r.priority||'-')+'</td>'+
+        '<td>'+reqBadge(r.status)+'</td>'+
+        '<td style="color:var(--text-muted);font-size:12px;">'+reqFmtTime(r.updatedAt||r.createdAt)+'</td>'+
+        '<td><span onclick="event.stopPropagation();reqDelete('+r.id+')" style="color:var(--text-muted);cursor:pointer;">🗑</span></td>'+
+      '</tr>';
+    }).join('');
+  }
+
+  function reqRenderKanban(){
+    var rows = reqFiltered();
+    var wrap = document.getElementById('reqKanbanCols');
+    wrap.innerHTML = REQ_KANBAN_COLS.map(function(k){
+      var m = reqStatusMeta(k);
+      var cards = rows.filter(function(r){ return r.status===k; });
+      return '<div class="req-kcol">'+
+        '<div class="req-kcol-head"><span style="width:8px;height:8px;border-radius:50%;background:'+m.color+';display:inline-block;"></span>'+m.label+
+          '<span style="margin-left:auto;color:var(--text-muted);font-weight:400;">'+cards.length+'</span></div>'+
+        '<div class="req-kcol-body" data-status="'+k+'" ondragover="reqDragOver(event)" ondragleave="reqDragLeave(event)" ondrop="reqDrop(event)">'+
+          cards.map(function(r){
+            return '<div class="req-card" draggable="true" ondragstart="reqDragStart(event,'+r.id+')" onclick="reqOpenDetail('+r.id+')">'+
+              '<div class="req-card-title">'+esc(r.title)+'</div>'+
+              '<div class="req-card-meta"><span class="req-pri-'+esc(r.priority||'中')+'">'+esc(r.priority||'')+'</span>'+
+                '<span>'+esc(r.bizDomain||'')+'</span><span>'+esc(r.assigneeName||r.submitterName||'')+'</span></div>'+
+            '</div>';
+          }).join('')+
+        '</div></div>';
+    }).join('');
+  }
+
+  // ---- 拖动流转（看板）----
+  var reqDragId = null;
+  window.reqDragStart = function(e,id){ reqDragId=id; e.dataTransfer.effectAllowed='move'; };
+  window.reqDragOver = function(e){ e.preventDefault(); e.currentTarget.classList.add('dragover'); };
+  window.reqDragLeave = function(e){ e.currentTarget.classList.remove('dragover'); };
+  window.reqDrop = async function(e){
+    e.preventDefault(); e.currentTarget.classList.remove('dragover');
+    var to = e.currentTarget.getAttribute('data-status');
+    if(reqDragId==null) return;
+    var r = reqAll.filter(function(x){return x.id===reqDragId;})[0];
+    if(r && r.status!==to){ await reqTransition(reqDragId, to, true); }
+    reqDragId=null;
+  };
+
+  // ---- 新建（聊天式：聊清楚 → AI 凝练 → 创建）----
+  var reqDraftSession = null;   // 草稿会话（建卡时作为需求 sessionId 延续记忆）
+  var reqDraftSpec = null;      // finalize 产出的加工口径（JSON 字符串）
+
+  window.reqOpenCreate = function(){
+    reqDraftSession = 'draft-' + (localStorage.getItem('dn_userId')||'guest') + '-' + Date.now();
+    reqDraftSpec = null;
+    document.getElementById('reqCreateMsg').textContent='';
+    document.getElementById('reqDraftChat').style.display='flex';
+    document.getElementById('reqDraftReview').style.display='none';
+    document.getElementById('reqDraftStep').textContent='和 AI 聊清楚你要什么数';
+    document.getElementById('reqDraftInput').value='';
+    var box = document.getElementById('reqDraftMsgs'); box.innerHTML='';
+    reqDraftAdd('你好，我是需求分析师。直接说你要什么数据就行——比如「看每天的授信通过率」。我会追问口径、维度、时间范围等，帮你把需求聊清楚，最后凝练成一条完善的取数需求。','ai');
+    document.getElementById('reqCreateModal').style.display='flex';
+    setTimeout(function(){ document.getElementById('reqDraftInput').focus(); }, 50);
+  };
+  window.reqCloseCreate = function(){ document.getElementById('reqCreateModal').style.display='none'; };
+
+  function reqDraftAdd(text, who){
+    var box = document.getElementById('reqDraftMsgs');
+    var wrap = document.createElement('div');
+    wrap.style.cssText='display:flex;margin-bottom:12px;'+(who==='user'?'justify-content:flex-end;':'');
+    var bub = document.createElement('div');
+    bub.style.cssText='max-width:80%;padding:9px 13px;border-radius:12px;line-height:1.55;font-size:13px;white-space:pre-wrap;word-break:break-word;'+
+      (who==='user'?'background:var(--primary);color:#fff;border-bottom-right-radius:3px;':'background:var(--bg-card);border:1px solid var(--border);color:var(--text-regular);border-bottom-left-radius:3px;');
+    bub.textContent=text; wrap.appendChild(bub); box.appendChild(wrap); box.scrollTop=box.scrollHeight;
+    return bub;
+  }
+  window.reqDraftSend = async function(){
+    var inp = document.getElementById('reqDraftInput');
+    var text = inp.value.trim(); if(!text) return;
+    inp.value=''; reqDraftAdd(text,'user');
+    var thinking = reqDraftAdd('思考中…','ai');
+    try{
+      var d = await (await fetch(REQ_API+'/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({session_id:reqDraftSession, message:text})})).json();
+      thinking.textContent = d.reply || ('出错：'+JSON.stringify(d));
+    }catch(e){ thinking.textContent='请求失败（请确认对话服务已在 8000 端口启动）'; }
+    document.getElementById('reqDraftMsgs').scrollTop = 1e9;
+  };
+  window.reqFinalize = async function(){
+    document.getElementById('reqCreateMsg').textContent='';
+    var msg = reqDraftAdd('正在把对话凝练成完善需求…','ai');
+    try{
+      var d = await (await fetch(REQ_API+'/finalize',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({session_id:reqDraftSession})})).json();
+      if(!d.ok){ msg.textContent = d.msg || '还没聊出内容，先描述下你的需求'; return; }
+      msg.textContent = '已生成完善需求，请在下一步确认。';
+      document.getElementById('reqRevTitle').value = d.title||'';
+      document.getElementById('reqRevDesc').value = d.description||'';
+      var spec = d.spec||{};
+      reqDraftSpec = (typeof spec==='object') ? JSON.stringify(spec) : String(spec);
+      document.getElementById('reqRevSpec').textContent = spec.raw ? spec.raw : reqFmtSpec(spec);
+      // 切到步骤②
+      document.getElementById('reqDraftChat').style.display='none';
+      document.getElementById('reqDraftReview').style.display='block';
+      document.getElementById('reqDraftStep').textContent='确认 / 微调这条需求';
+    }catch(e){ msg.textContent='生成失败（请确认对话服务已在 8000 端口启动）'; }
+  };
+  window.reqBackToChat = function(){
+    document.getElementById('reqDraftReview').style.display='none';
+    document.getElementById('reqDraftChat').style.display='flex';
+    document.getElementById('reqDraftStep').textContent='和 AI 聊清楚你要什么数';
+    document.getElementById('reqCreateMsg').textContent='';
+  };
+  window.reqConfirmCreate = async function(){
+    var title = document.getElementById('reqRevTitle').value.trim();
+    if(!title){ document.getElementById('reqCreateMsg').textContent='请填写需求标题'; return; }
+    var body = {
+      title: title,
+      description: document.getElementById('reqRevDesc').value.trim(),
+      bizDomain: document.getElementById('reqRevDomain').value.trim(),
+      priority: document.getElementById('reqRevPriority').value,
+      spec: reqDraftSpec || null,
+      sessionId: reqDraftSession,   // 保留草稿会话，澄清记忆延续到详情页
+      submitterId: Number(localStorage.getItem('dn_userId'))||null,
+      submitterName: localStorage.getItem('dn_nickname')||localStorage.getItem('dn_username')||'我'
+    };
+    try{
+      var d = await (await fetch('/api/requirements',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();
+      if(d.code===0){ reqCloseCreate(); await reqLoad(); reqOpenDetail(d.data.id); }
+      else document.getElementById('reqCreateMsg').textContent='❌ '+(d.msg||'创建失败');
+    }catch(e){ document.getElementById('reqCreateMsg').textContent='请求失败：'+e.message; }
+  };
+  window.reqDelete = async function(id){
+    if(!confirm('确认删除该需求？')) return;
+    try{ await fetch('/api/requirements/'+id,{method:'DELETE'}); await reqLoad(); }catch(e){}
+  };
+
+  // ---- 详情 ----
+  window.reqOpenDetail = async function(id){
+    try{
+      var d = await (await fetch('/api/requirements/'+id)).json();
+      if(d.code!==0 || !d.data){ return; }
+      reqCur = d.data;
+    }catch(e){ return; }
+    document.getElementById('reqBoard').style.display='none';
+    document.getElementById('reqDetail').style.display='block';
+    reqRenderDetail();
+  };
+  window.reqCloseDetail = function(){
+    reqCur = null; reqSpecPending = null;
+    var dt = document.getElementById('reqDetail'); if(dt) dt.style.display='none';
+    var bd = document.getElementById('reqBoard'); if(bd) bd.style.display='block';
+  };
+
+  function reqRenderDetail(){
+    var r = reqCur; if(!r) return;
+    document.getElementById('reqDetailTitle').textContent = r.title;
+    var sm = reqStatusMeta(r.status), stEl = document.getElementById('reqDetailStatus');
+    stEl.textContent = sm.label; stEl.style.color = sm.color; stEl.style.background = sm.bg;
+    document.getElementById('reqDetailDesc').textContent = r.description || '（未填写描述）';
+    document.getElementById('reqDetailMeta').innerHTML =
+      '<span>提出人：'+esc(r.submitterName||'-')+'</span>'+
+      '<span>处理人：'+esc(r.assigneeName||'-')+'</span>'+
+      '<span>业务域：'+esc(r.bizDomain||'-')+'</span>'+
+      '<span>优先级：'+esc(r.priority||'-')+'</span>'+
+      '<span>创建：'+reqFmtTime(r.createdAt)+'</span>';
+    // spec / sql / result / check
+    document.getElementById('reqDetailSpec').textContent = r.spec ? reqSpecText(r.spec) : '（尚未生成，去左侧和 AI 澄清后点「生成加工口径」）';
+    document.getElementById('reqSpecSaveBtn').style.display = 'none';
+    document.getElementById('reqDetailSql').textContent = r.sqlText || '（无）';
+    document.getElementById('reqDetailResult').textContent = r.resultSummary || '（无）';
+    document.getElementById('reqDetailCheck').textContent = r.checkResult || '（无）';
+    reqRenderOps();
+    reqLoadLog(r.id);
+    // 聊天
+    document.getElementById('reqMessages').innerHTML='';
+    reqAdd('这条需求的澄清对话。描述/追问口径、时间范围、维度、过滤条件，我会边查元数据边帮你澄清。','ai');
+  }
+
+  function reqSpecText(spec){
+    if(!spec) return '';
+    try{ var o = (typeof spec==='string')?JSON.parse(spec):spec; return reqFmtSpec(o); }
+    catch(e){ return spec; }
+  }
+
+  // ---- 生命周期操作按钮（阶段5）----
+  var REQ_OPS = {
+    clarifying: [['reviewing','进入评审','btn-primary'],['rejected','驳回','']],
+    reviewing:  [['confirmed','确认需求','btn-primary'],['clarifying','退回澄清',''],['rejected','驳回','']],
+    confirmed:  [['querying','开始出数','btn-primary']],
+    querying:   [['checking','出数完成','btn-primary']],
+    checking:   [['delivered','核对通过','btn-primary'],['querying','核对不过·退回','']],
+    delivered:  [['closed','验收关闭','btn-primary'],['querying','退回重跑','']],
+    closed:     [['clarifying','重新打开','']],
+    rejected:   [['clarifying','重新打开','']]
+  };
+  function reqRenderOps(){
+    var r = reqCur; if(!r) return;
+    var ops = REQ_OPS[r.status]||[];
+    document.getElementById('reqDetailOps').innerHTML = ops.map(function(o){
+      return '<button class="btn btn-sm '+o[2]+'" onclick="reqTransition('+r.id+',\''+o[0]+'\')">'+o[1]+'</button>';
+    }).join('');
+  }
+  window.reqTransition = async function(id, to, fromBoard){
+    try{
+      var op = localStorage.getItem('dn_nickname')||localStorage.getItem('dn_username')||'我';
+      var d = await (await fetch('/api/requirements/'+id+'/status',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:to, operator:op})})).json();
+      if(d.code!==0){ alert(d.msg||'流转失败'); return; }
+      await reqLoad();
+      if(!fromBoard && reqCur && reqCur.id===id){ await reqOpenDetail(id); }
+    }catch(e){ alert('请求失败：'+e.message); }
+  };
+
+  // ---- AI 澄清对话（挂到当前需求的 session）----
+  function reqAdd(text, who){
+    var box = document.getElementById('reqMessages');
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;margin-bottom:12px;'+(who==='user'?'justify-content:flex-end;':'');
+    var bub = document.createElement('div');
+    bub.style.cssText = 'max-width:82%;padding:9px 13px;border-radius:12px;line-height:1.55;font-size:13px;white-space:pre-wrap;word-break:break-word;'+
+      (who==='user'?'background:var(--primary);color:#fff;border-bottom-right-radius:3px;':'background:var(--bg-card);border:1px solid var(--border);color:var(--text-regular);border-bottom-left-radius:3px;');
+    bub.textContent = text; wrap.appendChild(bub); box.appendChild(wrap); box.scrollTop = box.scrollHeight;
+    return bub;
+  }
+  window.reqSend = async function(){
+    if(!reqCur){ return; }
+    var inp = document.getElementById('reqInput');
+    var text = inp.value.trim(); if(!text) return;
+    inp.value=''; reqAdd(text,'user');
+    var thinking = reqAdd('思考中…','ai');
+    try{
+      var res = await fetch(REQ_API+'/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({session_id:reqCur.sessionId, message:text})});
+      var d = await res.json();
+      thinking.textContent = d.reply || ('出错：'+JSON.stringify(d));
+    }catch(e){ thinking.textContent = '请求失败（请确认对话服务已在 8000 端口启动）'; }
+    document.getElementById('reqMessages').scrollTop = 1e9;
+  };
+
+  // 生成加工口径 + 建模建议（基于当前需求的澄清对话）
+  window.reqGenSpec = async function(){
+    if(!reqCur){ return; }
+    var el = document.getElementById('reqDetailSpec');
+    el.textContent = '正在根据对话生成加工口径…';
+    try{
+      var d = await (await fetch(REQ_API+'/spec',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({session_id:reqCur.sessionId})})).json();
+      var s = (d && d.spec) || {};
+      var txt = s.raw ? s.raw : reqFmtSpec(s);
+      el.textContent = txt;
+      reqSpecPending = (typeof s==='object') ? JSON.stringify(s) : String(s);
+      document.getElementById('reqSpecSaveBtn').style.display = '';
+    }catch(e){ el.textContent = '请求失败（请确认对话服务已在 8000 端口启动）'; }
+  };
+  window.reqSaveSpec = async function(){
+    if(!reqCur || !reqSpecPending){ return; }
+    try{
+      var d = await (await fetch('/api/requirements/'+reqCur.id+'/spec',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({spec:reqSpecPending})})).json();
+      if(d.code===0){ reqSpecPending=null; await reqLoad(); await reqOpenDetail(reqCur.id); }
+      else alert(d.msg||'保存失败');
+    }catch(e){ alert('请求失败：'+e.message); }
+  };
+  function reqFmtSpec(s){
+    function sec(title, obj){
+      var out = '【'+title+'】\n';
+      for(var k in obj){
+        var v = obj[k];
+        if(Array.isArray(v)) v = v.length ? '\n    · '+v.join('\n    · ') : '（无）';
+        if(v==='' || v==null) continue;
+        out += '  '+k+'：'+v+'\n';
+      }
+      return out;
+    }
+    function list(title, arr){
+      if(!arr || !arr.length) return '';
+      return '【'+title+'】\n    · '+arr.join('\n    · ')+'\n';
+    }
+    // 新版：指标口径文档结构
+    if(s['指标'] || s['口径']){
+      var t = '';
+      if(s['指标']) t += sec('指标', s['指标']) + '\n';
+      if(s['口径']) t += sec('口径', s['口径']) + '\n';
+      if(s['粒度']) t += '【粒度】\n  '+s['粒度']+'\n\n';
+      t += list('维度', s['维度']) + (s['维度']&&s['维度'].length?'\n':'');
+      t += list('待业务确认', s['待业务确认']) + (s['待业务确认']&&s['待业务确认'].length?'\n':'');
+      if(s['方向建议']) t += '【给数仓的方向建议】\n  '+s['方向建议']+'\n';
+      return t || JSON.stringify(s, null, 2);
+    }
+    // 旧版兼容：加工口径 + 建模建议
+    var t2 = '';
+    if(s['加工口径']) t2 += sec('加工口径', s['加工口径']) + '\n';
+    if(s['建模建议']) t2 += sec('建模建议', s['建模建议']);
+    return t2 || JSON.stringify(s, null, 2);
+  }
+
+  // ---- AI 取数 / 核对（多 Agent · 阶段6）----
+  window.reqRunQuery = async function(){
+    if(!reqCur){ return; }
+    var sqlEl = document.getElementById('reqDetailSql'), resEl = document.getElementById('reqDetailResult');
+    sqlEl.textContent = '取数 Agent 正在根据加工口径生成 SQL 并出数…'; resEl.textContent='…';
+    try{
+      var d = await (await fetch(REQ_API+'/query',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({session_id:reqCur.sessionId, spec:reqCur.spec||''})})).json();
+      sqlEl.textContent = d.sql || '（未生成）';
+      resEl.textContent = d.result_summary || d.error || '（无结果）';
+      // 落库
+      await fetch('/api/requirements/'+reqCur.id+'/query',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({sqlText:d.sql||'', resultSummary:d.result_summary||''})});
+      await reqLoad();
+    }catch(e){ sqlEl.textContent='请求失败（确认 AI 服务 8000 已起）'; resEl.textContent=''; }
+  };
+  window.reqRunCheck = async function(){
+    if(!reqCur){ return; }
+    var el = document.getElementById('reqDetailCheck');
+    el.textContent = '核对 Agent 正在校验行数/汇总/口径…';
+    try{
+      var d = await (await fetch(REQ_API+'/check',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({session_id:reqCur.sessionId, spec:reqCur.spec||'', sql:reqCur.sqlText||'', result_summary:reqCur.resultSummary||''})})).json();
+      el.textContent = d.check_result || d.error || '（无结论）';
+      await fetch('/api/requirements/'+reqCur.id+'/check',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({checkResult:d.check_result||''})});
+      await reqLoad();
+    }catch(e){ el.textContent='请求失败（确认 AI 服务 8000 已起）'; }
+  };
+
+  // ---- 流转记录（阶段4）----
+  window.reqLoadLog = async function(id){
+    var el = document.getElementById('reqDetailLog'); if(!el) return;
+    try{
+      var d = await (await fetch('/api/requirements/'+id+'/logs')).json();
+      var logs = (d && d.code===0 && d.data) ? d.data : [];
+      if(!logs.length){ el.innerHTML='<div style="color:var(--text-muted);font-size:12px;">暂无流转记录</div>'; return; }
+      el.innerHTML = logs.map(function(l){
+        var arrow = l.fromStatus ? (reqStatusMeta(l.fromStatus).label+' → '+reqStatusMeta(l.toStatus).label) : ('创建 · '+reqStatusMeta(l.toStatus).label);
+        return '<div class="req-log-item"><span style="color:var(--text-muted);flex:0 0 108px;font-size:12px;">'+reqFmtTime(l.createdAt)+'</span>'+
+          '<span><b>'+esc(l.operator||'系统')+'</b> '+esc(arrow)+(l.comment?('　'+esc(l.comment)):'')+'</span></div>';
+      }).join('');
+    }catch(e){ el.innerHTML='<div style="color:var(--text-muted);font-size:12px;">（流转记录接口未就绪）</div>'; }
+  };
+
+  var aiUpId = null;    // 当前更新弹窗指向的批次 id
+  var AI_OP = {create:'新建',update:'更新'};
+  window.aiClose = function(mid){ document.getElementById(mid).style.display='none'; };
+
+  // ---- 新建 ----
+  window.aiOpenImport = function(){
+    document.getElementById('aiNewTitle').value='';
+    document.getElementById('aiNewTexts').value='';
+    document.getElementById('aiImportMsg').textContent='';
+    document.getElementById('aiImportModal').style.display='flex';
+  };
+  window.aiImport = async function(){
+    var title = document.getElementById('aiNewTitle').value.trim();
+    var texts = document.getElementById('aiNewTexts').value.split('\n').map(function(s){return s.trim();}).filter(Boolean);
+    var msg = document.getElementById('aiImportMsg');
+    if(!title||!texts.length){ msg.textContent='请填标题和至少一条文本'; return; }
+    msg.textContent='导入中...';
+    try{
+      var d = await (await fetch(AI_API+'/api/batches',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({title:title,texts:texts})})).json();
+      if(d.ok){ aiClose('aiImportModal'); aiLoadList(); }
+      else msg.textContent='❌ '+d.msg;
+    }catch(e){ msg.textContent='请求失败（请确认 RAG 服务已在 8001 端口启动）'; }
+  };
+
+  // ---- 更新（弹窗，预填现有内容）----
+  window.aiOpenUpdate = async function(id){
+    try{
+      var d = await (await fetch(AI_API+'/api/batches/'+id)).json();
+      if(!d.ok) return;
+      aiUpId = id;
+      document.getElementById('aiUpTitle').value = d.batch.title||'';
+      document.getElementById('aiUpTexts').value = (d.batch.texts||[]).join('\n');
+      document.getElementById('aiUpdateMsg').textContent='';
+      document.getElementById('aiUpdateModal').style.display='flex';
+    }catch(e){}
+  };
+  window.aiUpdate = async function(){
+    if(!aiUpId) return;
+    var title = document.getElementById('aiUpTitle').value.trim();
+    var texts = document.getElementById('aiUpTexts').value.split('\n').map(function(s){return s.trim();}).filter(Boolean);
+    var msg = document.getElementById('aiUpdateMsg');
+    if(!title||!texts.length){ msg.textContent='请填标题和至少一条文本'; return; }
+    msg.textContent='更新中：替换旧内容并生成 AI 变更总结…';
+    try{
+      var d = await (await fetch(AI_API+'/api/batches/'+aiUpId,{method:'PUT',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({title:title,texts:texts})})).json();
+      if(d.ok){
+        aiClose('aiUpdateModal'); aiLoadList();
+        // 更新后直接弹出 AI 总结 + 版本历史，方便用户知道改了啥
+        aiOpenVersions(aiUpId);
+      } else msg.textContent='❌ '+(d.msg||'更新失败');
+    }catch(e){ msg.textContent='请求失败（请确认 RAG 服务已在 8001 端口启动）'; }
+  };
+
+  // ---- 版本历史 ----
+  window.aiOpenVersions = async function(id){
+    var body = document.getElementById('aiVerBody');
+    body.innerHTML='<span style="color:var(--text-muted);">加载中…</span>';
+    document.getElementById('aiVersionModal').style.display='flex';
+    try{
+      var d = await (await fetch(AI_API+'/api/batches/'+id+'/versions')).json();
+      if(!d.ok){ body.innerHTML='❌ '+(d.msg||'加载失败'); return; }
+      document.getElementById('aiVerTitle').textContent = '版本历史 · '+d.title;
+      body.innerHTML = d.versions.map(function(v){
+        var opTag = v.op==='create'
+          ? '<span style="font-size:12px;padding:1px 8px;border-radius:10px;background:var(--success-light);color:var(--success);">'+(AI_OP[v.op]||v.op)+'</span>'
+          : '<span style="font-size:12px;padding:1px 8px;border-radius:10px;background:#f1e9ff;color:#8250df;">'+(AI_OP[v.op]||v.op)+'</span>';
+        var cur = (v.version===d.current) ? ' <span style="font-size:11px;color:var(--primary);">当前</span>' : '';
+        var content = (v.texts||[]).map(function(t,i){return '<div style="font-size:12px;color:var(--text-regular);padding:3px 0;">'+(i+1)+'. '+esc(t)+'</div>';}).join('');
+        return '<div class="ai-ver">'+
+          '<div class="ai-ver-head"><b style="font-size:14px;">v'+v.version+'</b>'+cur+opTag+
+            '<span style="margin-left:auto;font-size:12px;color:var(--text-muted);">'+fmt(v.created_at)+' · '+v.count+' 条</span></div>'+
+          '<div style="font-size:13px;color:var(--text-regular);background:var(--bg-body);border-radius:6px;padding:8px 10px;margin-bottom:8px;">'+
+            '<span style="color:var(--text-muted);">📋 本次变更：</span>'+esc(v.summary||'')+'</div>'+
+          '<details><summary style="cursor:pointer;font-size:12px;color:var(--text-muted);">查看该版本内容（'+v.count+' 条）</summary>'+content+'</details>'+
+        '</div>';
+      }).join('');
+    }catch(e){ body.innerHTML='加载失败（请确认 RAG 服务在 8001）'; }
+  };
+
+  // ---- 删除 ----
+  window.aiDeleteBatch = async function(id, title){
+    if(!confirm('确认删除知识「'+title+'」？将同时删除它的全部向量，不可恢复。')) return;
+    try{
+      var d = await (await fetch(AI_API+'/api/batches/'+id,{method:'DELETE'})).json();
+      if(d.ok){ aiLoadList(); }
+    }catch(e){}
+  };
+
+  // ---- 语义检索弹窗 ----
+  window.aiOpenSearch = function(){
+    document.getElementById('aiSearchResult').innerHTML='';
+    document.getElementById('aiQuery').value='';
+    document.getElementById('aiSearchModal').style.display='flex';
+    setTimeout(function(){ document.getElementById('aiQuery').focus(); },50);
+  };
+
+  window.aiLoadList = async function(){
+    var tb = document.getElementById('aiList'); if(!tb) return;
+    try{
+      var list = await (await fetch(AI_API+'/api/batches')).json();
+      tb.innerHTML='';
+      if(!list.length){ tb.innerHTML='<tr><td colspan="6" style="padding:14px;color:var(--text-muted);">还没有知识，点右上角「+ 新建」导入第一条。</td></tr>'; return; }
+      list.forEach(function(b){
+        var tr=document.createElement('tr');
+        tr.style.cssText='border-top:1px solid var(--divider);';
+        var tag = b.vectorized ? '<span style="font-size:12px;padding:2px 8px;border-radius:10px;background:var(--success-light);color:var(--success);">已向量化</span>'
+                               : '<span style="font-size:12px;padding:2px 8px;border-radius:10px;background:rgba(250,173,20,.12);color:var(--warning);">未向量化</span>';
+        var ver = 'v'+(b.version||1);
+        var safeTitle = esc(b.title).replace(/\x27/g,'');
+        var titleCell = '<span style="cursor:pointer;color:var(--text-primary);" onclick="aiOpenVersions(\''+b.id+'\')">'+esc(b.title)+'</span>';
+        var ops = '<td style="padding:10px;text-align:right;white-space:nowrap;">'+
+          '<button class="btn btn-sm" onclick="aiOpenUpdate(\''+b.id+'\')">更新</button> '+
+          '<button class="btn btn-sm" onclick="aiOpenVersions(\''+b.id+'\')">版本</button> '+
+          '<button class="btn btn-sm" style="color:#e74c3c;" onclick="aiDeleteBatch(\''+b.id+'\',\''+safeTitle+'\')">删除</button></td>';
+        tr.innerHTML='<td style="padding:10px;">'+titleCell+'</td>'+
+          '<td style="padding:10px;color:var(--text-muted);">'+fmt(b.updated_at||b.created_at)+'</td>'+
+          '<td style="padding:10px;">'+b.count+'</td>'+
+          '<td style="padding:10px;color:var(--text-muted);">'+ver+'</td>'+
+          '<td style="padding:10px;">'+tag+'</td>'+ops;
+        tb.appendChild(tr);
+      });
+    }catch(e){ tb.innerHTML='<tr><td colspan="6" style="padding:10px;color:var(--text-muted);">加载失败（请确认 RAG 服务在 8001）</td></tr>'; }
+  };
+  window.aiSearch = async function(){
+    var q = document.getElementById('aiQuery').value.trim(); if(!q) return;
+    var box = document.getElementById('aiSearchResult');
+    box.innerHTML='<span style="color:var(--text-muted);font-size:13px;">检索中...</span>';
+    try{
+      var d = await (await fetch(AI_API+'/api/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q,k:3})})).json();
+      if(d.ok){ box.innerHTML = d.results.map(function(r){return '<div style="padding:8px 10px;border:1px solid var(--divider);border-radius:var(--radius);margin-bottom:6px;font-size:14px;">'+esc(r.text)+'<div style="color:var(--text-muted);font-size:12px;margin-top:2px;">来源：'+esc(r.title)+' · 距离：'+r.score.toFixed(4)+'</div></div>';}).join('') || '<span style="color:var(--text-muted);">无结果</span>'; }
+      else box.innerHTML='<span style="color:var(--text-muted);">❌ '+esc(d.msg)+'</span>';
+    }catch(e){ box.innerHTML='<span style="color:var(--text-muted);">请求失败（请确认 RAG 服务在 8001）</span>'; }
+  };
+})();
+</script>
+
+<!-- ===== 登录遮罩 ===== -->
+<div id="loginOverlay" style="position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#1890ff,#0050b3);display:none;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:36px 32px;width:340px;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <svg viewBox="0 0 28 28" width="30" height="30" fill="none"><rect x="2" y="2" width="24" height="24" rx="5" fill="#1890ff"/><path d="M8 9h12M8 14h8M8 19h10" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+      <span style="font-size:20px;font-weight:700;color:#1f2225;">DataNote</span>
+    </div>
+    <div style="font-size:13px;color:#767c82;margin-bottom:20px;">登录后使用数据平台与 AI 助手</div>
+    <input id="loginUser" placeholder="用户名" style="width:100%;border:1px solid #e0e0e6;border-radius:6px;padding:11px 12px;font-size:14px;outline:none;margin-bottom:12px;">
+    <input id="loginPass" type="password" placeholder="密码" onkeydown="if(event.key==='Enter')doLogin()" style="width:100%;border:1px solid #e0e0e6;border-radius:6px;padding:11px 12px;font-size:14px;outline:none;margin-bottom:8px;">
+    <div id="loginMsg" style="font-size:12px;color:#ff4d4f;min-height:16px;margin-bottom:8px;"></div>
+    <button onclick="doLogin()" style="width:100%;background:#1890ff;color:#fff;border:none;border-radius:6px;padding:11px;font-size:15px;cursor:pointer;">登 录</button>
+    <div style="font-size:12px;color:#a0a0a0;margin-top:14px;text-align:center;">默认管理员：admin / admin123</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  // ---------- 登录 / 登出 ----------
+  window.doLogin = async function(){
+    var u = document.getElementById('loginUser').value.trim();
+    var p = document.getElementById('loginPass').value;
+    var msg = document.getElementById('loginMsg');
+    if(!u||!p){ msg.style.color='#ff4d4f'; msg.textContent='请输入用户名和密码'; return; }
+    msg.style.color='#767c82'; msg.textContent='登录中...';
+    try{
+      var d = await (await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})})).json();
+      if(d.code===0){
+        localStorage.setItem('dn_userId', d.data.userId);
+        localStorage.setItem('dn_username', d.data.username);
+        localStorage.setItem('dn_nickname', d.data.nickname||d.data.username);
+        localStorage.setItem('dn_role', d.data.role||'USER');
+        applyLogin();
+        document.getElementById('loginOverlay').style.display='none';
+      }else{ msg.style.color='#ff4d4f'; msg.textContent=d.msg||'登录失败'; }
+    }catch(e){ msg.style.color='#ff4d4f'; msg.textContent='请求失败'; }
+  };
+  window.doLogout = function(){
+    if(!confirm('确认退出登录？')) return;
+    ['dn_userId','dn_username','dn_nickname','dn_role'].forEach(function(k){ localStorage.removeItem(k); });
+    location.reload();
+  };
+  function applyLogin(){
+    var nick = localStorage.getItem('dn_nickname')||'';
+    var role = localStorage.getItem('dn_role')||'USER';
+    var nickEl = document.getElementById('userNick'); if(nickEl) nickEl.textContent = nick;
+    var btnEl = document.getElementById('userBtn'); if(btnEl) btnEl.textContent = (nick||'U').charAt(0);
+    var tab = document.getElementById('tabUserMgmt'); if(tab) tab.style.display = (role==='ADMIN') ? '' : 'none';
+  }
+  function checkLogin(){
+    if(localStorage.getItem('dn_userId')){
+      applyLogin();
+      var o=document.getElementById('loginOverlay'); if(o) o.style.display='none';
+    }else{
+      var o=document.getElementById('loginOverlay'); if(o) o.style.display='flex';
+    }
+  }
+  if(document.readyState!=='loading') checkLogin(); else document.addEventListener('DOMContentLoaded', checkLogin);
+
+  // ---------- 用户管理 ----------
+  window.umLoadList = async function(){
+    var tb = document.getElementById('umList'); if(!tb) return;
+    try{
+      var d = await (await fetch('/api/users')).json();
+      tb.innerHTML='';
+      (d.data||[]).forEach(function(u){
+        var roleTag = u.role==='ADMIN'
+          ? '<span style="font-size:12px;padding:2px 8px;border-radius:10px;background:var(--primary-light);color:var(--primary);">管理员</span>'
+          : '<span style="font-size:12px;color:var(--text-muted);">普通用户</span>';
+        var statusTag = u.status===1
+          ? '<span style="font-size:12px;padding:2px 8px;border-radius:10px;background:var(--success-light);color:var(--success);">启用</span>'
+          : '<span style="font-size:12px;padding:2px 8px;border-radius:10px;background:rgba(0,0,0,.06);color:var(--text-muted);">禁用</span>';
+        var ops = '<a style="color:var(--primary);cursor:pointer;margin-right:10px;" onclick="umToggle('+u.id+','+(u.status===1?0:1)+')">'+(u.status===1?'禁用':'启用')+'</a>'+
+                  '<a style="color:var(--primary);cursor:pointer;margin-right:10px;" onclick="umResetPwd('+u.id+')">重置密码</a>'+
+                  (u.username==='admin'?'':'<a style="color:var(--error);cursor:pointer;" onclick="umDelete('+u.id+')">删除</a>');
+        var tr=document.createElement('tr'); tr.style.borderTop='1px solid var(--divider)';
+        tr.innerHTML='<td style="padding:9px;">'+u.username+'</td><td style="padding:9px;">'+(u.nickname||'')+'</td>'+
+          '<td style="padding:9px;">'+roleTag+'</td><td style="padding:9px;">'+statusTag+'</td>'+
+          '<td style="padding:9px;color:var(--text-muted);">'+(u.createdAt||'').replace('T',' ').slice(0,16)+'</td>'+
+          '<td style="padding:9px;white-space:nowrap;">'+ops+'</td>';
+        tb.appendChild(tr);
+      });
+      if(!tb.children.length) tb.innerHTML='<tr><td colspan="6" style="padding:10px;color:var(--text-muted);">暂无用户</td></tr>';
+    }catch(e){ tb.innerHTML='<tr><td colspan="6" style="padding:10px;color:var(--text-muted);">加载失败</td></tr>'; }
+  };
+  window.umShowCreate = function(){
+    document.getElementById('umUsername').value='';
+    document.getElementById('umNickname').value='';
+    document.getElementById('umPassword').value='';
+    document.getElementById('umRole').value='USER';
+    document.getElementById('umMsg').textContent='';
+    document.getElementById('umModal').style.display='flex';
+  };
+  window.umSave = async function(){
+    var body = { username:document.getElementById('umUsername').value.trim(),
+                 nickname:document.getElementById('umNickname').value.trim(),
+                 password:document.getElementById('umPassword').value,
+                 role:document.getElementById('umRole').value };
+    var msg = document.getElementById('umMsg');
+    if(!body.username){ msg.textContent='用户名不能为空'; return; }
+    try{
+      var d = await (await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();
+      if(d.code===0){ document.getElementById('umModal').style.display='none'; umLoadList(); }
+      else msg.textContent=d.msg||'保存失败';
+    }catch(e){ msg.textContent='请求失败'; }
+  };
+  window.umToggle = async function(id,status){
+    await fetch('/api/users/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:status})});
+    umLoadList();
+  };
+  window.umResetPwd = async function(id){
+    var np = prompt('输入新密码（留空则重置为 123456）'); if(np===null) return;
+    await fetch('/api/users/'+id+'/password',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:np})});
+    alert('密码已重置');
+  };
+  window.umDelete = async function(id){
+    if(!confirm('确认删除该用户？')) return;
+    var d = await (await fetch('/api/users/'+id,{method:'DELETE'})).json();
+    if(d.code!==0){ alert(d.msg||'删除失败'); }
+    umLoadList();
+  };
+})();
+</script>
+
+<script>
+(function(){
+  var aiCfgData = [];
+  var aiCfgEditId = null;
+  var PROV = { bailian:'百炼', anthropic:'Anthropic', openai:'OpenAI', deepseek:'DeepSeek', custom:'自定义' };
+  var PROV_DEFAULT = {
+    bailian:   { url:'https://dashscope.aliyuncs.com/compatible-mode', model:'qwen-plus' },
+    anthropic: { url:'https://api.anthropic.com', model:'claude-opus-4-8' },
+    openai:    { url:'https://api.openai.com', model:'gpt-4o' },
+    deepseek:  { url:'https://api.deepseek.com', model:'deepseek-chat' },
+    custom:    { url:'', model:'' }
+  };
+
+  window.aiCfgLoad = async function(){
+    var tb = document.getElementById('aiCfgList'); if(!tb) return;
+    try{
+      var d = await (await fetch('/api/ai/configs')).json();
+      aiCfgData = d.data || [];
+      tb.innerHTML = '';
+      aiCfgData.forEach(function(c){
+        var st = c.isDefault===1
+          ? '<span style="font-size:12px;padding:2px 8px;border-radius:10px;background:var(--primary-light);color:var(--primary);">● 默认</span>'
+          : (c.status===1 ? '<span style="font-size:12px;color:var(--success);">启用</span>' : '<span style="font-size:12px;color:var(--text-muted);">禁用</span>');
+        var ops = (c.isDefault===1 ? '' : '<a style="color:var(--primary);cursor:pointer;margin-right:10px;" onclick="aiCfgSetDefault('+c.id+')">设为默认</a>')+
+                  '<a style="color:var(--primary);cursor:pointer;margin-right:10px;" onclick="aiCfgEdit('+c.id+')">编辑</a>'+
+                  '<a style="color:var(--error);cursor:pointer;" onclick="aiCfgDelete('+c.id+')">删除</a>';
+        var tr = document.createElement('tr'); tr.style.borderTop='1px solid var(--divider)';
+        tr.innerHTML = '<td style="padding:9px;">'+(c.name||'')+'</td>'+
+          '<td style="padding:9px;">'+(PROV[c.provider]||c.provider||'')+'</td>'+
+          '<td style="padding:9px;">'+(c.model||'')+'</td>'+
+          '<td style="padding:9px;color:var(--text-muted);">'+(c.apiKey||'(未设置)')+'</td>'+
+          '<td style="padding:9px;">'+st+'</td>'+
+          '<td style="padding:9px;white-space:nowrap;">'+ops+'</td>';
+        tb.appendChild(tr);
+      });
+      if(!tb.children.length) tb.innerHTML='<tr><td colspan="6" style="padding:12px;color:var(--text-muted);">还没有配置，点右上角「+ 新增」</td></tr>';
+    }catch(e){ tb.innerHTML='<tr><td colspan="6" style="padding:12px;color:var(--text-muted);">加载失败</td></tr>'; }
+  };
+
+  window.aiCfgOnProvider = function(){
+    var p = document.getElementById('aiCfgProviderSel').value;
+    var d = PROV_DEFAULT[p] || PROV_DEFAULT.custom;
+    var base = document.getElementById('aiCfgBase'), model = document.getElementById('aiCfgModelInput');
+    var knownUrls = ['https://dashscope.aliyuncs.com/compatible-mode','https://api.anthropic.com','https://api.openai.com','https://api.deepseek.com',''];
+    if(!base.value || knownUrls.indexOf(base.value)>=0) base.value = d.url;
+    var knownModels = ['qwen-plus','claude-opus-4-8','gpt-4o','deepseek-chat',''];
+    if(!model.value || knownModels.indexOf(model.value)>=0) model.value = d.model;
+  };
+
+  window.aiCfgShowCreate = function(){
+    aiCfgEditId = null;
+    document.getElementById('aiCfgModalTitle').textContent = '新增 AI 配置';
+    document.getElementById('aiCfgName').value = '';
+    document.getElementById('aiCfgProviderSel').value = 'bailian';
+    document.getElementById('aiCfgBase').value = '';
+    document.getElementById('aiCfgModelInput').value = '';
+    document.getElementById('aiCfgMsg').textContent = '';
+    aiCfgOnProvider();
+    document.getElementById('aiCfgModal').style.display = 'flex';
+  };
+
+  window.aiCfgEdit = function(id){
+    var c = aiCfgData.filter(function(x){ return x.id===id; })[0]; if(!c) return;
+    aiCfgEditId = id;
+    document.getElementById('aiCfgModalTitle').textContent = '编辑 AI 配置';
+    document.getElementById('aiCfgName').value = c.name||'';
+    document.getElementById('aiCfgProviderSel').value = c.provider||'bailian';
+    document.getElementById('aiCfgBase').value = c.baseUrl||'';
+    document.getElementById('aiCfgModelInput').value = c.model||'';
+    document.getElementById('aiCfgMsg').textContent = '';
+    document.getElementById('aiCfgModal').style.display = 'flex';
+  };
+
+  function aiCfgBody(){
+    return {
+      id: aiCfgEditId,
+      name: document.getElementById('aiCfgName').value.trim(),
+      provider: document.getElementById('aiCfgProviderSel').value,
+      baseUrl: document.getElementById('aiCfgBase').value.trim(),
+      model: document.getElementById('aiCfgModelInput').value.trim()
+      // apiKey 不再由页面提交：统一在 ai-service/.env 中配置
+    };
+  }
+
+  window.aiCfgSave = async function(){
+    var b = aiCfgBody(); var msg = document.getElementById('aiCfgMsg');
+    if(!b.name){ msg.style.color='var(--error)'; msg.textContent='请填配置名称'; return; }
+    try{
+      var url = aiCfgEditId ? ('/api/ai/configs/'+aiCfgEditId) : '/api/ai/configs';
+      var method = aiCfgEditId ? 'PUT' : 'POST';
+      var d = await (await fetch(url,{method:method,headers:{'Content-Type':'application/json'},body:JSON.stringify(b)})).json();
+      if(d.code===0){ document.getElementById('aiCfgModal').style.display='none'; aiCfgLoad(); }
+      else { msg.style.color='var(--error)'; msg.textContent=d.msg||'保存失败'; }
+    }catch(e){ msg.style.color='var(--error)'; msg.textContent='请求失败'; }
+  };
+
+  window.aiCfgTest = async function(){
+    var b = aiCfgBody(); var msg = document.getElementById('aiCfgMsg');
+    msg.style.color='var(--text-muted)'; msg.textContent='测试中...';
+    try{
+      var d = await (await fetch('/api/ai/configs/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)})).json();
+      if(d.code===0){ msg.style.color='var(--success)'; msg.textContent='✓ 连接成功'; }
+      else { msg.style.color='var(--error)'; msg.textContent='✗ '+(d.msg||'连接失败'); }
+    }catch(e){ msg.style.color='var(--error)'; msg.textContent='✗ 请求失败'; }
+  };
+
+  window.aiCfgSetDefault = async function(id){
+    await fetch('/api/ai/configs/'+id+'/default',{method:'PUT'});
+    aiCfgLoad();
+  };
+
+  window.aiCfgDelete = async function(id){
+    if(!confirm('确认删除该 AI 配置？')) return;
+    await fetch('/api/ai/configs/'+id,{method:'DELETE'});
+    aiCfgLoad();
+  };
+})();
+</script>
+
 <div id="viewHome" class="page-view" style="display:none">
   <div style="max-width:1100px;margin:0 auto;padding:36px 24px;">
 
@@ -5030,49 +6368,81 @@ function syncModalConfirm() {
 
   // 新建任务，清空旧 ID
   currentSyncTaskId = null;
+  hasPendingVersion = false;
 
   // 关闭弹窗
   document.getElementById('syncModal').classList.remove('show');
 
-  // 打开同步配置面板
-  addOrActivateTab('tab-sync-' + Date.now(), taskName, 'sync');
+  var finalName = taskName || ('ods_' + db + '_' + table.toLowerCase() + '_' + mode);
 
-  // 自动填充集成面板的数据源/库/表
-  document.getElementById('srcConn').value = dsId;
-  document.getElementById('syncMode').value = mode;
-  document.getElementById('propNodeName').value = taskName;
-  document.getElementById('propNodeType').value = '数据同步';
-
-  // 新任务未上线，显示上线按钮
-  currentScriptOnline = false;
-  updateToolbarOnlineBtn();
-
-  // 加载数据库下拉并自动选中
-  var dbSel = document.getElementById('srcDb');
-  dbSel.innerHTML = '<option value="">加载中...</option>';
-  api('/api/datasource/' + dsId + '/databases').then(function(res) {
-    dbSel.innerHTML = '<option value="">请选择数据库</option>';
-    if (res.code === 0 && res.data) {
-      res.data.forEach(function(d) {
-        dbSel.innerHTML += '<option value="' + escapeHtml(d) + '"' + (d === db ? ' selected' : '') + '>' + escapeHtml(d) + '</option>';
-      });
+  // 立即保存到 DB 获取 ID，同时刷新左侧栏
+  apiPost('/api/script/sync-task', {
+    taskName: finalName,
+    sourceDsId: parseInt(dsId),
+    sourceDb: db,
+    sourceTable: table,
+    targetDb: 'ods',
+    targetTable: finalName,
+    syncMode: mode,
+    partitionField: 'dt',
+    status: 1
+  }).then(function(saveRes) {
+    if (saveRes.code === 0 && saveRes.data) {
+      currentSyncTaskId = saveRes.data.id;
+      loadFileTree(); // 立即出现在左侧栏
     }
-    // 加载表下拉并自动选中
-    var tblSel = document.getElementById('srcTable');
-    tblSel.innerHTML = '<option value="">加载中...</option>';
-    return api('/api/datasource/' + dsId + '/tables?db=' + encodeURIComponent(db));
-  }).then(function(res) {
-    var tblSel = document.getElementById('srcTable');
-    tblSel.innerHTML = '<option value="">请选择数据表</option>';
-    if (res.code === 0 && res.data) {
-      res.data.forEach(function(t) {
-        tblSel.innerHTML += '<option value="' + escapeHtml(t) + '"' + (t === table ? ' selected' : '') + '>' + escapeHtml(t) + '</option>';
-      });
+
+    var tabId = currentSyncTaskId ? 'tab-sync-' + currentSyncTaskId : 'tab-sync-' + Date.now();
+    addOrActivateTab(tabId, finalName, 'sync');
+
+    var tabEl = document.querySelector('[data-id="' + tabId + '"]');
+    if (tabEl) tabEl.dataset.syncTaskId = currentSyncTaskId;
+    if (tabContentCache[tabId]) {
+      tabContentCache[tabId].syncTaskId = currentSyncTaskId;
+      tabContentCache[tabId].hasPendingVersion = false;
+      tabContentCache[tabId].syncFormState = {
+        dsId: String(dsId), syncMode: mode, srcDb: db, srcTable: table, tgtTable: finalName
+      };
     }
-    // 设置目标表名
-    document.getElementById('tgtTable').value = taskName;
-    // 自动加载字段
-    intgLoadColumns();
+
+    // 自动填充集成面板的数据源/库/表
+    document.getElementById('srcConn').value = dsId;
+    document.getElementById('syncMode').value = mode;
+    document.getElementById('propNodeName').value = finalName;
+    document.getElementById('propNodeType').value = '数据同步';
+
+    // 新任务未上线，显示上线按钮
+    currentScriptOnline = false;
+    updateToolbarOnlineBtn();
+
+    // 加载数据库下拉并自动选中
+    var dbSel = document.getElementById('srcDb');
+    dbSel.innerHTML = '<option value="">加载中...</option>';
+    api('/api/datasource/' + dsId + '/databases').then(function(res) {
+      dbSel.innerHTML = '<option value="">请选择数据库</option>';
+      if (res.code === 0 && res.data) {
+        res.data.forEach(function(d) {
+          dbSel.innerHTML += '<option value="' + escapeHtml(d) + '"' + (d === db ? ' selected' : '') + '>' + escapeHtml(d) + '</option>';
+        });
+      }
+      // 加载表下拉并自动选中
+      var tblSel = document.getElementById('srcTable');
+      tblSel.innerHTML = '<option value="">加载中...</option>';
+      return api('/api/datasource/' + dsId + '/tables?db=' + encodeURIComponent(db));
+    }).then(function(res) {
+      var tblSel = document.getElementById('srcTable');
+      tblSel.innerHTML = '<option value="">请选择数据表</option>';
+      if (res.code === 0 && res.data) {
+        res.data.forEach(function(t) {
+          tblSel.innerHTML += '<option value="' + escapeHtml(t) + '"' + (t === table ? ' selected' : '') + '>' + escapeHtml(t) + '</option>';
+        });
+      }
+      // 设置目标表名并加载字段映射
+      document.getElementById('tgtTable').value = finalName;
+      intgLoadColumns();
+    });
+  }).catch(function(err) {
+    msgBox('创建任务失败: ' + err.message);
   });
 }
 
@@ -5202,8 +6572,100 @@ function showView(type) {
 }
 
 // ===== Tab management =====
-var tabContentCache = {}; // id -> { editorContent, scriptId, scriptName, syncTaskId }
+var tabContentCache = {}; // id -> { editorContent, scriptId, scriptName, syncTaskId, syncFormState, hasPendingVersion }
 var tabCounter = 0;
+var hasPendingVersion = false; // 当前 tab 是否有已保存但未上线的版本
+
+// --- 同步任务表单状态 ---
+function _getSyncFormState() {
+  return {
+    dsId: (document.getElementById('srcConn') || {}).value || '',
+    syncMode: (document.getElementById('syncMode') || {}).value || 'df',
+    srcDb: (document.getElementById('srcDb') || {}).value || '',
+    srcTable: (document.getElementById('srcTable') || {}).value || '',
+    tgtTable: (document.getElementById('tgtTable') || {}).value || ''
+  };
+}
+
+function _restoreSyncFormState(state) {
+  if (!state) return;
+  var srcConnEl = document.getElementById('srcConn');
+  var syncModeEl = document.getElementById('syncMode');
+  if (srcConnEl && state.dsId) srcConnEl.value = state.dsId;
+  if (syncModeEl && state.syncMode) syncModeEl.value = state.syncMode;
+  if (!state.dsId || !state.srcDb) return;
+  intgLoadDatabases().then(function() {
+    var dbEl = document.getElementById('srcDb');
+    if (dbEl && state.srcDb) dbEl.value = state.srcDb;
+    if (!state.srcTable) return Promise.resolve();
+    return intgLoadTables().then(function() {
+      var tblEl = document.getElementById('srcTable');
+      if (tblEl && state.srcTable) tblEl.value = state.srcTable;
+      var tgtEl = document.getElementById('tgtTable');
+      if (tgtEl && state.tgtTable) tgtEl.value = state.tgtTable;
+      intgLoadColumns();
+    });
+  });
+}
+
+// --- 自动保存 ---
+function _autoSaveScript() {
+  if (!currentScriptId) return;
+  var savedScriptId = currentScriptId;
+  var content = codeArea.value;
+  var propDesc = document.getElementById('propDesc');
+  var propDbName = document.getElementById('propDatabaseName');
+  var payload = { id: savedScriptId, content: content };
+  if (propDesc) payload.description = propDesc.value;
+  if (propDbName) payload.databaseName = propDbName.value;
+  fetch('/api/script/save', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).then(function(r) { return r.json(); }).then(function(res) {
+    if (res.code === 0) {
+      // 更新对应 tab 的 cache
+      var tabId = 'tab-script-' + savedScriptId;
+      if (tabContentCache[tabId]) tabContentCache[tabId].hasPendingVersion = true;
+      // 若用户仍停留在此 tab，刷新全局状态和徽标
+      if (currentScriptId === savedScriptId) {
+        hasPendingVersion = true;
+        _updatePendingBadge();
+        loadScriptVersions(savedScriptId);
+      }
+    }
+  }).catch(function() {});
+}
+
+function _autoSaveSyncTask(state) {
+  if (!currentSyncTaskId) return;
+  var savedSyncId = currentSyncTaskId;
+  var taskName = state.tgtTable || ('ods_' + state.srcDb + '_' + state.srcTable + '_' + state.syncMode);
+  fetch('/api/script/sync-task', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: savedSyncId, taskName: taskName,
+      sourceDsId: parseInt(state.dsId), sourceDb: state.srcDb,
+      sourceTable: state.srcTable, targetDb: 'ods',
+      targetTable: taskName, syncMode: state.syncMode,
+      partitionField: 'dt', status: 1
+    })
+  }).then(function(r) { return r.json(); }).then(function(res) {
+    if (res.code === 0) {
+      var tabId = 'tab-sync-' + savedSyncId;
+      if (tabContentCache[tabId]) tabContentCache[tabId].hasPendingVersion = true;
+      if (currentSyncTaskId === savedSyncId) { hasPendingVersion = true; _updatePendingBadge(); }
+    }
+  }).catch(function() {});
+}
+
+// --- 未上线版本徽标 ---
+function _updatePendingBadge() {
+  var show = hasPendingVersion && !currentScriptOnline;
+  ['pendingVerBadge', 'syncPendingVerBadge'].forEach(function(bid) {
+    var b = document.getElementById(bid);
+    if (b) b.style.display = show ? 'inline-flex' : 'none';
+  });
+}
 
 function addOrActivateTab(id, name, type) {
   var tabBar = document.getElementById('editorTabs');
@@ -5244,14 +6706,23 @@ function _saveCurrentTabContent() {
   if (!activeTab) return;
   var id = activeTab.dataset.id;
   if (!tabContentCache[id]) tabContentCache[id] = {};
+  // 保存 hasPendingVersion 到 cache
+  tabContentCache[id].hasPendingVersion = hasPendingVersion;
   if (activeTab.dataset.type === 'sql') {
     tabContentCache[id].editorContent = codeArea.value;
     tabContentCache[id].scriptId = currentScriptId;
     tabContentCache[id].scriptName = currentScriptName;
     var dbInput = document.getElementById('propDatabaseName');
     if (dbInput) tabContentCache[id].databaseName = dbInput.value;
+    // 离开时自动保存脚本
+    if (currentScriptId && codeArea.value) _autoSaveScript();
   } else if (activeTab.dataset.type === 'sync') {
     tabContentCache[id].syncTaskId = currentSyncTaskId;
+    // 保存同步任务表单状态，供切回此 tab 时恢复
+    var sf = _getSyncFormState();
+    tabContentCache[id].syncFormState = sf;
+    // 离开时自动保存同步任务
+    if (currentSyncTaskId && sf.dsId && sf.srcDb && sf.srcTable) _autoSaveSyncTask(sf);
   }
 }
 
@@ -5266,6 +6737,8 @@ function switchTab(tabEl) {
   // Restore global state from tab dataset / cache
   var id = tabEl.dataset.id;
   var cache = tabContentCache[id];
+  // 恢复 hasPendingVersion 状态
+  hasPendingVersion = (cache && cache.hasPendingVersion) || false;
   if (tabEl.dataset.type === 'sql') {
     currentSyncTaskId = null;  // 切到脚本时清空同步任务ID
     if (cache && cache.scriptId != null) {
@@ -5294,6 +6767,10 @@ function switchTab(tabEl) {
       currentSyncTaskId = cache.syncTaskId;
     } else if (tabEl.dataset.syncTaskId) {
       currentSyncTaskId = parseInt(tabEl.dataset.syncTaskId);
+    }
+    // 恢复同步任务表单状态（切 tab 时重新填充表单）
+    if (cache && cache.syncFormState) {
+      _restoreSyncFormState(cache.syncFormState);
     }
     // 加载同步任务调度状态并更新上线按钮
     if (currentSyncTaskId) {
@@ -5381,14 +6858,23 @@ function openSyncTask(el, id, name, db, table, mode, dsId) {
   document.querySelectorAll('.tree-file').forEach(function(f) { f.classList.remove('active'); });
   el.classList.add('active');
   currentSyncTaskId = id;
+  hasPendingVersion = false;
 
   var tabId = 'tab-sync-' + id;
   addOrActivateTab(tabId, name, 'sync');
 
-  // Store syncTaskId in tab dataset and cache
+  // Store syncTaskId and form state in tab dataset and cache
   var tabEl = document.querySelector('[data-id="' + tabId + '"]');
   if (tabEl) { tabEl.dataset.syncTaskId = id; }
-  if (tabContentCache[tabId]) { tabContentCache[tabId].syncTaskId = id; }
+  if (tabContentCache[tabId]) {
+    tabContentCache[tabId].syncTaskId = id;
+    tabContentCache[tabId].hasPendingVersion = false;
+    tabContentCache[tabId].syncFormState = {
+      dsId: String(dsId || ''), syncMode: mode || 'df',
+      srcDb: db || '', srcTable: table || '',
+      tgtTable: name || ('ods_' + db + '_' + (table || '').toLowerCase() + '_' + (mode || 'df'))
+    };
+  }
 
   // Set datasource
   document.getElementById('srcConn').value = dsId;
@@ -5737,6 +7223,7 @@ function intgSaveTask() {
         var cacheId = activeTab.dataset.id;
         if (tabContentCache[cacheId]) tabContentCache[cacheId].syncTaskId = currentSyncTaskId;
       }
+      hasPendingVersion = true;
       currentScriptOnline = false;
       updateToolbarOnlineBtn();
       loadFileTree();
@@ -6393,6 +7880,8 @@ function saveScript() {
   if (propDbName) savePayload.databaseName = propDbName.value;
   apiPost('/api/script/save', savePayload).then(function(res) {
     if (res.code === 0) {
+      hasPendingVersion = true;
+      _updatePendingBadge();
       loadScriptVersions(currentScriptId);
       msgBox('保存成功');
     } else {
@@ -7229,6 +8718,7 @@ function openScriptFromTree(el, scriptId, name) {
 
   currentScriptId = scriptId;
   currentScriptName = name;
+  hasPendingVersion = false;
   selectedHistoryVersionId = null;
   document.getElementById('propNodeName').value = name;
   document.getElementById('propNodeType').value = 'HiveSQL';
@@ -7560,6 +9050,7 @@ function updateToolbarOnlineBtn() {
       btn.innerHTML = '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 12V5M4 8l3-3 3 3"/><path d="M2 2h10"/></svg> 上线';
     }
   });
+  _updatePendingBadge();
 }
 
 function toolbarOnline() {
@@ -7601,6 +9092,7 @@ function doOnline() {
       if (btn) btn.disabled = false;
       if (res2.code === 0) {
         currentScriptOnline = true;
+        hasPendingVersion = false;
         updateToolbarOnlineBtn();
         if (isSyncTask) loadSyncSchedConfig(currentSyncTaskId);
         else {
@@ -8908,7 +10400,9 @@ var ROUTES = {
   'quality':     { view: 'viewQuality',             layout: 'editor', init: function() { loadQualityOverview(); } },
   'metrics':     { view: 'viewMetrics',             layout: 'editor', init: function() { loadMetricList(); loadMetricCategories(); } },
   'project':     { view: 'viewProject',             layout: 'editor', init: null },
-  'settings':    { view: 'viewSettings',            layout: 'editor', init: null }
+  'settings':    { view: 'viewSettings',            layout: 'editor', init: function() { if(window.umLoadList) umLoadList(); } },
+  'requirement': { view: 'viewRequirement',         layout: 'page',   init: function() { reqInit(); } },
+  'ai':          { view: 'viewAI',                  layout: 'page',   init: function() { aiLoadList(); } }
 };
 
 var currentRoute = null;
@@ -9511,41 +11005,287 @@ function dmLoadPreview() {
 /* --- Tab: 数据探查 --- */
 function dmLoadProfile() {
   var body = document.getElementById('dmDetailBody');
-  body.innerHTML = '<div class="datamap-empty">正在探查数据...</div>';
-  fetch('/api/metadata/profile?db=' + encodeURIComponent(dmCurrentDb) + '&table=' + encodeURIComponent(dmCurrentTable))
+  body.innerHTML = '<div class="datamap-empty">加载中...</div>';
+  fetch('/api/metadata/profile/ai?db=' + encodeURIComponent(dmCurrentDb) + '&table=' + encodeURIComponent(dmCurrentTable))
+    .then(function(r){ return r.json(); })
+    .then(function(res){
+      if (res.code !== 0) { body.innerHTML = '<div class="datamap-empty">加载失败: ' + escapeHtml(res.msg || '') + '</div>'; return; }
+      var d = res.data;
+      if (!d.exists) {
+        body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:220px;gap:16px;">'
+          + '<div style="font-size:32px;">🔍</div>'
+          + '<div style="font-size:14px;color:var(--text-muted);">尚未进行数据探查</div>'
+          + '<button class="btn btn-primary" onclick="dmRunAiProfile()" style="padding:8px 24px;">启动 AI 数据探查</button>'
+          + '</div>';
+        return;
+      }
+      dmRenderAiProfile(d);
+    })
+    .catch(function(e){ body.innerHTML = '<div class="datamap-empty">网络错误</div>'; });
+}
+
+function dmRunAiProfile() {
+  var body = document.getElementById('dmDetailBody');
+  body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:220px;gap:16px;">'
+    + '<div class="dm-spinner"></div>'
+    + '<div style="font-size:13px;color:var(--text-muted);">AI 正在分析数据结构与质量，请稍候...</div>'
+    + '</div>';
+  fetch('/api/metadata/profile/ai/run?db=' + encodeURIComponent(dmCurrentDb) + '&table=' + encodeURIComponent(dmCurrentTable), {method:'POST'})
     .then(function(r){ return r.json(); })
     .then(function(res){
       if (res.code !== 0) { body.innerHTML = '<div class="datamap-empty">探查失败: ' + escapeHtml(res.msg || '') + '</div>'; return; }
-      var d = res.data;
-      var html = '<div style="display:flex;gap:24px;margin-bottom:16px;">'
-        + '<div style="padding:12px 16px;background:var(--bg-body);border-radius:6px;border:1px solid var(--border);"><div style="font-size:11px;color:var(--text-muted);">总行数</div><div style="font-size:18px;font-weight:600;">' + formatNumber(d.totalRows) + '</div></div>'
-        + '<div style="padding:12px 16px;background:var(--bg-body);border-radius:6px;border:1px solid var(--border);"><div style="font-size:11px;color:var(--text-muted);">字段数</div><div style="font-size:18px;font-weight:600;">' + d.columnCount + '</div></div>'
-        + '</div>';
-      var fields = d.fields || [];
-      html += '<table class="datamap-table"><thead><tr>'
-        + '<th>字段名</th><th>类型</th><th>空值数</th><th>空值率</th><th>唯一值数</th><th>最小值</th><th>最大值</th>'
-        + '</tr></thead><tbody>';
-      fields.forEach(function(f) {
-        var nullCls = '';
-        if (f.nullRate) {
-          var pct = parseFloat(f.nullRate);
-          if (pct > 50) nullCls = ' class="dm-null-high"';
-          else if (pct === 0) nullCls = ' class="dm-null-ok"';
-        }
-        html += '<tr>'
-          + '<td class="dm-tname">' + escapeHtml(f.name) + '</td>'
-          + '<td style="font-size:12px;color:var(--text-muted);">' + escapeHtml(f.type) + '</td>'
-          + '<td class="dm-num">' + (f.nullCount != null ? f.nullCount : '-') + '</td>'
-          + '<td' + nullCls + ' style="text-align:right;font-size:12px;">' + escapeHtml(f.nullRate || '-') + '</td>'
-          + '<td class="dm-num">' + (f.distinctCount != null ? f.distinctCount : '-') + '</td>'
-          + '<td style="font-size:12px;max-width:150px;overflow:hidden;text-overflow:ellipsis;" title="' + escapeHtml(f.minVal || '') + '">' + escapeHtml(f.minVal || '-') + '</td>'
-          + '<td style="font-size:12px;max-width:150px;overflow:hidden;text-overflow:ellipsis;" title="' + escapeHtml(f.maxVal || '') + '">' + escapeHtml(f.maxVal || '-') + '</td>'
-          + '</tr>';
-      });
-      html += '</tbody></table>';
-      body.innerHTML = html;
-    });
+      dmRenderAiProfile(res.data);
+    })
+    .catch(function(e){ body.innerHTML = '<div class="datamap-empty">探查出错: ' + e.message + '</div>'; });
 }
+
+function dmRenderAiProfile(d) {
+  var body = document.getElementById('dmDetailBody');
+  var report = {}, raw = {};
+  try { report = JSON.parse(d.aiReport || '{}'); } catch(e){}
+  try { raw = JSON.parse(d.rawStats || '{}'); } catch(e){}
+
+  // ── 工具函数 ──
+  var SEV = {
+    error:   { color:'#cf1322', bg:'#fff1f0', border:'#ffa39e', label:'严重' },
+    warning: { color:'#d46b08', bg:'#fff7e6', border:'#ffd591', label:'中等' },
+    info:    { color:'#096dd9', bg:'#e6f4ff', border:'#91caff', label:'提示' }
+  };
+  var CHECK = {
+    pass:    { color:'#389e0d', bg:'#f6ffed', icon:'✓' },
+    warning: { color:'#d46b08', bg:'#fff7e6', icon:'!' },
+    fail:    { color:'#cf1322', bg:'#fff1f0', icon:'✕' }
+  };
+  var ACTION = {
+    drop:        { label:'丢弃', color:'#595959', bg:'#f5f5f5' },
+    fixComment:  { label:'修正注释', color:'#7c3aed', bg:'#f5f3ff' },
+    derive:      { label:'衍生字段', color:'#1d4ed8', bg:'#eff6ff' },
+    filter:      { label:'数据过滤', color:'#065f46', bg:'#ecfdf5' },
+    convert:     { label:'类型转换', color:'#9a3412', bg:'#fff7ed' }
+  };
+
+  function sec(title) {
+    return '<div style="font-size:13px;font-weight:600;color:var(--text-primary);'
+         + 'margin:24px 0 10px;padding-bottom:8px;border-bottom:1px solid var(--border);">'
+         + title + '</div>';
+  }
+  function tag(text, color, bg) {
+    return '<span style="display:inline-block;font-size:11px;font-weight:600;padding:1px 8px;border-radius:3px;'
+         + 'color:' + color + ';background:' + bg + ';white-space:nowrap;">' + escapeHtml(text) + '</span>';
+  }
+  function mono(text) {
+    return '<code style="font-size:12px;padding:1px 5px;border-radius:3px;background:rgba(0,0,0,.06);">'
+         + escapeHtml(text) + '</code>';
+  }
+
+  var html = '';
+
+  // ── 顶栏 ──
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">'
+        + '<span style="font-size:12px;color:var(--text-muted);">'
+        + (d.profileTime ? '探查时间：' + d.profileTime.replace('T',' ').substring(0,19) : '') + '</span>'
+        + '<button class="btn btn-sm" onclick="dmRunAiProfile()">重新探查</button>'
+        + '</div>';
+
+  // ── 概览卡片行（固定4列） ──
+  var partitions = raw.partitions || [];
+  var latestPart = partitions.length ? partitions[partitions.length-1].replace('dt=','') : '-';
+  html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;">';
+  [ ['总行数',  formatNumber(raw.totalRows || 0)],
+    ['字段数',  String(raw.columnCount || '-')],
+    ['最新分区', latestPart],
+    ['主题域',  report.theme || '-']
+  ].forEach(function(item) {
+    html += '<div style="padding:12px 14px;background:var(--bg-body);border:1px solid var(--border);border-radius:6px;">'
+          + '<div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">' + item[0] + '</div>'
+          + '<div style="font-size:15px;font-weight:700;color:var(--text-primary);line-height:1.3;">' + escapeHtml(item[1]) + '</div>'
+          + '</div>';
+  });
+  html += '</div>';
+
+  // ── 表类型 + 摘要 ──
+  if (report.tableType || report.summary) {
+    html += '<div style="padding:12px 14px;background:var(--bg-body);border:1px solid var(--border);border-radius:6px;margin-bottom:14px;">';
+    if (report.tableType) {
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'
+            + '<span style="font-size:11px;color:var(--text-muted);">表类型</span>'
+            + tag(report.tableType, '#1d4ed8', '#eff6ff');
+      if (report.tableTypeReason) {
+        html += '<span style="font-size:12px;color:var(--text-muted);">— ' + escapeHtml(report.tableTypeReason) + '</span>';
+      }
+      html += '</div>';
+    }
+    if (report.summary) {
+      html += '<div style="font-size:13px;color:#333;line-height:1.7;">' + escapeHtml(report.summary) + '</div>';
+    }
+    html += '</div>';
+  }
+
+  // ── 业务流程 ──
+  var bpList = report.businessProcess || [];
+  if (bpList.length > 0) {
+    html += sec('业务流程');
+    html += '<div style="display:grid;grid-template-columns:repeat(' + bpList.length + ',1fr);gap:0;">';
+    bpList.forEach(function(bp, idx) {
+      var isLast = idx === bpList.length - 1;
+      html += '<div style="position:relative;padding:10px 14px 10px ' + (idx===0?'14':'24') + 'px;'
+            + 'background:' + (idx%2===0 ? 'var(--bg-body)' : 'var(--bg-hover,#fafafa)') + ';'
+            + 'border:1px solid var(--border);border-left:' + (idx===0?'1':'0') + 'px solid var(--border);">'
+            + (idx > 0 ? '<div style="position:absolute;left:-1px;top:50%;transform:translateY(-50%);'
+                       + 'width:0;height:0;border-top:8px solid transparent;border-bottom:8px solid transparent;'
+                       + 'border-left:10px solid var(--border);z-index:1;"></div>'
+                       + '<div style="position:absolute;left:0px;top:50%;transform:translateY(-50%);'
+                       + 'width:0;height:0;border-top:7px solid transparent;border-bottom:7px solid transparent;'
+                       + 'border-left:9px solid ' + (idx%2===0?'var(--bg-body)':'var(--bg-hover,#fafafa)') + ';z-index:2;"></div>' : '')
+            + '<div style="font-size:10px;color:#1677ff;font-weight:600;margin-bottom:3px;">步骤 ' + bp.step + '</div>'
+            + '<div style="font-size:13px;font-weight:600;margin-bottom:4px;">' + escapeHtml(bp.name || '') + '</div>'
+            + '<div style="font-size:11px;color:var(--text-muted);line-height:1.6;">'
+            + (bp.fields||[]).map(function(f){ return mono(f); }).join(' ') + '</div>'
+            + '</div>';
+    });
+    html += '</div>';
+  }
+
+  // ── 数据质量问题 ──
+  var issues = report.qualityIssues || [];
+  var conflicts = report.enumConflicts || [];
+  var totalProblems = issues.length + conflicts.length;
+  if (totalProblems > 0) {
+    html += sec('数据质量问题 <span style="font-size:12px;font-weight:400;color:var(--text-muted);">共 ' + totalProblems + ' 项</span>');
+
+    // 问题列表
+    issues.forEach(function(iss) {
+      var s = SEV[iss.severity] || SEV.info;
+      html += '<div style="display:grid;grid-template-columns:52px 1fr;gap:10px;align-items:start;'
+            + 'padding:10px 12px;margin-bottom:6px;border-radius:5px;'
+            + 'background:' + s.bg + ';border:1px solid ' + s.border + ';">'
+            + '<div style="text-align:center;padding-top:1px;">'
+            + '<span style="font-size:11px;font-weight:700;color:' + s.color + ';display:block;">' + s.label + '</span>'
+            + (iss.field ? '<span style="font-size:10px;color:' + s.color + ';opacity:.7;">' + escapeHtml(iss.field) + '</span>' : '')
+            + '</div>'
+            + '<div>'
+            + '<div style="font-size:13px;color:#222;margin-bottom:3px;">' + escapeHtml(iss.desc || '') + '</div>'
+            + (iss.scope ? '<div style="font-size:11px;color:var(--text-muted);">范围：' + escapeHtml(iss.scope) + '</div>' : '')
+            + '</div></div>';
+    });
+
+    // 枚举矛盾
+    conflicts.forEach(function(cf) {
+      var s = SEV[cf.severity] || SEV.error;
+      html += '<div style="padding:10px 12px;margin-bottom:6px;border-radius:5px;'
+            + 'background:' + s.bg + ';border:1px solid ' + s.border + ';">'
+            + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'
+            + '<span style="font-size:11px;font-weight:700;color:' + s.color + ';">枚举矛盾</span>'
+            + mono(cf.field || '')
+            + '<span style="font-size:12px;color:var(--text-muted);">' + escapeHtml(cf.desc || '') + '</span>'
+            + '</div>';
+      var vals = cf.values || [];
+      if (vals.length > 0) {
+        html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">'
+              + '<thead><tr style="background:rgba(0,0,0,.04);">'
+              + '<th style="padding:5px 8px;text-align:left;font-weight:600;">值</th>'
+              + '<th style="padding:5px 8px;text-align:left;font-weight:600;">注释含义</th>'
+              + '<th style="padding:5px 8px;text-align:left;font-weight:600;">数据实际含义</th>'
+              + '</tr></thead><tbody>';
+        vals.forEach(function(v) {
+          html += '<tr style="border-top:1px solid rgba(0,0,0,.06);">'
+                + '<td style="padding:5px 8px;font-family:monospace;font-weight:600;">' + escapeHtml(String(v.val||'')) + '</td>'
+                + '<td style="padding:5px 8px;color:var(--text-muted);">' + escapeHtml(v.commentSays||'-') + '</td>'
+                + '<td style="padding:5px 8px;font-weight:600;color:' + (v.conflict===false?'#389e0d':s.color) + ';">' + escapeHtml(v.dataSays||'-') + '</td>'
+                + '</tr>';
+        });
+        html += '</tbody></table>';
+      }
+      html += '</div>';
+    });
+  }
+
+  // ── 字段间一致性校验 ──
+  var checks = report.crossFieldChecks || [];
+  if (checks.length > 0) {
+    html += sec('字段间一致性校验');
+    checks.forEach(function(ck) {
+      var c = CHECK[ck.result] || CHECK.warning;
+      html += '<div style="display:grid;grid-template-columns:20px auto 1fr;gap:8px;align-items:start;'
+            + 'padding:8px 12px;margin-bottom:5px;border-radius:5px;background:' + c.bg + ';">'
+            + '<div style="font-size:13px;font-weight:700;color:' + c.color + ';text-align:center;padding-top:1px;">' + c.icon + '</div>'
+            + '<div style="font-size:13px;font-weight:500;color:var(--text-primary);padding-top:1px;">' + escapeHtml(ck.name||'') + '</div>'
+            + '<div style="font-size:12px;color:var(--text-muted);padding-top:2px;">' + escapeHtml(ck.detail||'') + '</div>'
+            + '</div>';
+    });
+  }
+
+  // ── 字段完整性 ──
+  var nullAnalysis = report.nullAnalysis || [];
+  var fields = raw.fields || [];
+  if (fields.length > 0) {
+    html += sec('字段完整性 <span style="font-size:12px;font-weight:400;color:var(--text-muted);">' + fields.length + ' 个字段</span>');
+    html += '<table class="datamap-table" style="table-layout:fixed;">'
+          + '<colgroup><col style="width:160px;"><col><col style="width:100px;"><col style="width:60px;"></colgroup>'
+          + '<thead><tr><th>字段名</th><th>注释</th><th>空值率</th><th>状态</th></tr></thead><tbody>';
+    fields.forEach(function(f) {
+      var nr = parseFloat(f.nullRate) || 0;
+      var barW = Math.round(Math.min(nr, 100));
+      var barColor = nr >= 50 ? '#ff7875' : nr >= 10 ? '#ffc069' : '#95de64';
+      var nullInfo = nullAnalysis.filter(function(n){ return n.field === f.name; })[0];
+      var statusEl = '';
+      if (nullInfo) {
+        if (nullInfo.type === 'unconditional') statusEl = tag('异常', '#cf1322', '#fff1f0');
+        else if (nullInfo.type === 'conditional') statusEl = tag('条件空', '#d46b08', '#fff7e6');
+        else statusEl = tag('正常', '#389e0d', '#f6ffed');
+      } else if (nr === 0) {
+        statusEl = tag('完整', '#389e0d', '#f6ffed');
+      }
+      html += '<tr>'
+            + '<td style="font-family:monospace;font-size:12px;font-weight:500;">' + escapeHtml(f.name) + '</td>'
+            + '<td style="font-size:12px;color:var(--text-muted);" title="' + escapeHtml(f.comment||'') + '">'
+            +   escapeHtml((f.comment||'-').substring(0,40)) + (f.comment&&f.comment.length>40?'…':'') + '</td>'
+            + '<td>'
+            +   '<div style="display:flex;align-items:center;gap:6px;">'
+            +     (nr > 0 ? '<div style="flex:1;height:4px;background:#f0f0f0;border-radius:2px;overflow:hidden;">'
+                         + '<div style="width:' + barW + '%;height:100%;background:' + barColor + ';border-radius:2px;"></div></div>' : '')
+            +     '<span style="font-size:12px;white-space:nowrap;' + (nr > 0 ? 'color:' + barColor + ';font-weight:600;' : 'color:var(--text-muted);') + '">' + (f.nullRate || '0%') + '</span>'
+            +   '</div>'
+            + '</td>'
+            + '<td style="text-align:center;">' + statusEl + '</td>'
+            + '</tr>';
+      // 空值含义行（若有）
+      if (nullInfo && nullInfo.meaning) {
+        html += '<tr style="background:var(--bg-hover,#fafafa);">'
+              + '<td colspan="4" style="padding:4px 10px 6px 26px;font-size:11px;color:var(--text-muted);">'
+              + '↳ ' + escapeHtml(nullInfo.meaning) + '</td></tr>';
+      }
+    });
+    html += '</tbody></table>';
+  }
+
+  // ── DWD 建设建议 ──
+  var suggs = report.dwdSuggestions || [];
+  if (suggs.length > 0) {
+    // 按 action 分组
+    var groups = {};
+    suggs.forEach(function(s) { var a = s.action||'derive'; if (!groups[a]) groups[a]=[]; groups[a].push(s); });
+    html += sec('DWD 建设建议');
+    Object.keys(groups).forEach(function(ac) {
+      var info = ACTION[ac] || { label: ac, color:'#595959', bg:'#f5f5f5' };
+      html += '<div style="margin-bottom:10px;">'
+            + '<div style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;'
+            + 'color:' + info.color + ';background:' + info.bg + ';padding:3px 10px;border-radius:3px;margin-bottom:6px;">'
+            + escapeHtml(info.label) + '</div>';
+      groups[ac].forEach(function(s) {
+        html += '<div style="display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:baseline;'
+              + 'padding:5px 10px;font-size:13px;">'
+              + '<div>' + (s.target ? mono(s.target) : '') + '</div>'
+              + '<div style="color:var(--text-muted);font-size:12px;">' + escapeHtml(s.desc||'') + '</div>'
+              + '</div>';
+      });
+      html += '</div>';
+    });
+  }
+
+  body.innerHTML = html;
+}
+/* --- Tab: DDL / SQL --- */
 
 /* --- Tab: DDL / SQL --- */
 function dmLoadDDL() {
@@ -11575,13 +13315,262 @@ function switchProjectTab(el, tab) {
 function switchSettingsTab(el, tab) {
   el.parentElement.querySelectorAll('.ops-sidebar-item').forEach(function(t) { t.classList.remove('active'); });
   el.classList.add('active');
-  ['settingsUserPanel', 'settingsDatasourcePanel', 'settingsEnvPanel', 'settingsSecurityPanel', 'settingsAiPanel', 'settingsMonitorPanel']
+  ['settingsUserPanel', 'settingsSubjectPanel', 'settingsDatasourcePanel', 'settingsEnvPanel', 'settingsSecurityPanel', 'settingsAiPanel', 'settingsPromptPanel', 'settingsMonitorPanel']
     .forEach(function(id) { var p = document.getElementById(id); if (p) p.style.display = 'none'; });
-  var panelMap = { user: 'settingsUserPanel', datasource: 'settingsDatasourcePanel', env: 'settingsEnvPanel', security: 'settingsSecurityPanel', ai: 'settingsAiPanel', monitor: 'settingsMonitorPanel' };
+  var panelMap = { user: 'settingsUserPanel', subject: 'settingsSubjectPanel', datasource: 'settingsDatasourcePanel', env: 'settingsEnvPanel', security: 'settingsSecurityPanel', ai: 'settingsAiPanel', prompt: 'settingsPromptPanel', monitor: 'settingsMonitorPanel' };
   if (panelMap[tab]) document.getElementById(panelMap[tab]).style.display = '';
   // 切到数据源管理时自动加载配置
   if (tab === 'datasource') loadDatasourceConfig();
   if (tab === 'env') loadEnvConfig();
+  if (tab === 'subject') loadSubjectDesign();
+}
+
+// ===== 提示词管理 =====
+var _promptCurrent = null; // 当前选中的提示词对象
+
+function promptLoad() {
+  fetch('/api/prompts').then(function(r) { return r.json(); }).then(function(res) {
+    var list = res.data || [];
+    var el = document.getElementById('promptList');
+    el.innerHTML = list.map(function(p) {
+      return '<div class="subj-item" id="promptItem_' + p.id + '" onclick="promptSelect(' + p.id + ')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:14px;">' +
+        '<div style="font-weight:500;">' + (p.name||'') + '</div>' +
+        '<div style="font-size:12px;color:var(--text-muted);margin-top:2px;">' + (p.code||'') + '</div>' +
+      '</div>';
+    }).join('');
+    if (!list.length) el.innerHTML = '<div style="padding:20px;font-size:13px;color:var(--text-muted);text-align:center;">暂无提示词</div>';
+  });
+}
+
+function promptSelect(id) {
+  document.querySelectorAll('#promptList .subj-item').forEach(function(el) { el.style.background = ''; });
+  var item = document.getElementById('promptItem_' + id);
+  if (item) item.style.background = 'var(--primary-light)';
+  fetch('/api/prompts/' + id).then(function(r) { return r.json(); }).then(function(res) {
+    var p = res.data;
+    _promptCurrent = p;
+    document.getElementById('promptEditName').value = p.name || '';
+    document.getElementById('promptEditCode').value = p.code || '';
+    document.getElementById('promptEditDesc').value = p.description || '';
+    document.getElementById('promptEditContent').value = p.content || '';
+    document.getElementById('promptEditorTitle').textContent = p.name;
+    document.getElementById('promptEditorBody').style.display = '';
+    document.getElementById('promptEditorEmpty').style.display = 'none';
+    document.getElementById('promptMsg').textContent = '';
+  });
+}
+
+function promptSave() {
+  if (!_promptCurrent) return;
+  var body = {
+    name: document.getElementById('promptEditName').value.trim(),
+    code: document.getElementById('promptEditCode').value.trim(),
+    description: document.getElementById('promptEditDesc').value.trim(),
+    content: document.getElementById('promptEditContent').value
+  };
+  if (!body.name || !body.code || !body.content) {
+    document.getElementById('promptMsg').textContent = '名称、标识符、内容不能为空';
+    return;
+  }
+  fetch('/api/prompts/' + _promptCurrent.id, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) })
+    .then(function(r) { return r.json(); }).then(function(res) {
+      if (res.code === 0) {
+        document.getElementById('promptMsg').textContent = '✓ 已保存';
+        document.getElementById('promptEditorTitle').textContent = body.name;
+        promptLoad();
+      } else {
+        document.getElementById('promptMsg').textContent = '保存失败：' + (res.msg || '');
+      }
+    });
+}
+
+function promptDelete() {
+  if (!_promptCurrent) return;
+  if (!confirm('确定删除「' + _promptCurrent.name + '」？')) return;
+  fetch('/api/prompts/' + _promptCurrent.id, { method: 'DELETE' }).then(function() {
+    _promptCurrent = null;
+    document.getElementById('promptEditorBody').style.display = 'none';
+    document.getElementById('promptEditorEmpty').style.display = '';
+    document.getElementById('promptEditorTitle').textContent = '请选择一个提示词';
+    promptLoad();
+  });
+}
+
+function promptShowCreate() {
+  document.getElementById('promptNewName').value = '';
+  document.getElementById('promptNewCode').value = '';
+  document.getElementById('promptNewDesc').value = '';
+  document.getElementById('promptCreateMsg').textContent = '';
+  var m = document.getElementById('promptCreateModal');
+  m.style.display = 'flex';
+}
+
+function promptCreate() {
+  var body = {
+    name: document.getElementById('promptNewName').value.trim(),
+    code: document.getElementById('promptNewCode').value.trim(),
+    description: document.getElementById('promptNewDesc').value.trim(),
+    content: '在此输入系统提示词…'
+  };
+  if (!body.name || !body.code) {
+    document.getElementById('promptCreateMsg').textContent = '名称和标识符不能为空';
+    return;
+  }
+  fetch('/api/prompts', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) })
+    .then(function(r) { return r.json(); }).then(function(res) {
+      if (res.code === 0) {
+        document.getElementById('promptCreateModal').style.display = 'none';
+        promptLoad();
+        setTimeout(function() { promptSelect(res.data.id); }, 300);
+      } else {
+        document.getElementById('promptCreateMsg').textContent = res.msg || '创建失败';
+      }
+    });
+}
+
+// ===== 系统配置：主题设计（一级/二级主题） =====
+var subjAllData = [];       // 全量主题
+var subjSelectedL1 = null;  // 当前选中的一级主题 id
+
+function loadSubjectDesign(keepSelection) {
+  api('/api/subject/list').then(function(res) {
+    if (res.code !== 0) { alert(res.msg || '加载主题失败'); return; }
+    subjAllData = res.data || [];
+    if (!keepSelection) {
+      // 默认选中第一个一级主题
+      var firstL1 = subjAllData.filter(function(s) { return !s.parentId; })[0];
+      subjSelectedL1 = firstL1 ? firstL1.id : null;
+    }
+    renderSubjL1();
+    renderSubjL2();
+  });
+}
+
+function renderSubjL1() {
+  var box = document.getElementById('subjL1List');
+  var l1 = subjAllData.filter(function(s) { return !s.parentId; });
+  if (l1.length === 0) {
+    box.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px;">暂无一级主题，点击右上角新建</div>';
+    return;
+  }
+  box.innerHTML = l1.map(function(s) {
+    var active = String(s.id) === String(subjSelectedL1);
+    var childCount = subjAllData.filter(function(c) { return String(c.parentId) === String(s.id); }).length;
+    return '<div onclick="subjSelectL1(' + s.id + ')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);' +
+      (active ? 'background:rgba(24,144,255,.08);border-left:3px solid var(--primary);' : 'border-left:3px solid transparent;') + '">' +
+      '<span style="font-size:14px;' + (active ? 'color:var(--primary);font-weight:500;' : '') + '">' + escapeHtml(s.name) +
+      '<span style="color:var(--text-muted);font-size:12px;margin-left:6px;">(' + childCount + ')</span></span>' +
+      '<span style="flex-shrink:0;">' +
+      '<a onclick="event.stopPropagation();subjRename(' + s.id + ')" style="color:var(--text-muted);font-size:12px;cursor:pointer;margin-right:8px;">改名</a>' +
+      '<a onclick="event.stopPropagation();subjDelete(' + s.id + ')" style="color:var(--error);font-size:12px;cursor:pointer;">删除</a>' +
+      '</span></div>';
+  }).join('');
+}
+
+function renderSubjL2() {
+  var box = document.getElementById('subjL2List');
+  var title = document.getElementById('subjL2Title');
+  var addBtn = document.getElementById('subjAddL2Btn');
+  if (!subjSelectedL1) {
+    title.textContent = '二级主题';
+    addBtn.style.display = 'none';
+    box.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px;">请先在左侧选择一个一级主题</div>';
+    return;
+  }
+  var parent = subjAllData.filter(function(s) { return String(s.id) === String(subjSelectedL1); })[0];
+  title.textContent = '二级主题' + (parent ? ' · ' + parent.name : '');
+  addBtn.style.display = '';
+  var l2 = subjAllData.filter(function(s) { return String(s.parentId) === String(subjSelectedL1); });
+  if (l2.length === 0) {
+    box.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px;">该主题下暂无二级主题，点击右上角新建</div>';
+    return;
+  }
+  box.innerHTML = l2.map(function(s) {
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);">' +
+      '<span style="font-size:14px;">' + escapeHtml(s.name) + '</span>' +
+      '<span style="flex-shrink:0;">' +
+      '<a onclick="subjRename(' + s.id + ')" style="color:var(--text-muted);font-size:12px;cursor:pointer;margin-right:8px;">改名</a>' +
+      '<a onclick="subjDelete(' + s.id + ')" style="color:var(--error);font-size:12px;cursor:pointer;">删除</a>' +
+      '</span></div>';
+  }).join('');
+}
+
+function subjSelectL1(id) {
+  subjSelectedL1 = id;
+  renderSubjL1();
+  renderSubjL2();
+}
+
+function subjNextSort(parentId) {
+  var siblings = subjAllData.filter(function(s) {
+    return parentId ? String(s.parentId) === String(parentId) : !s.parentId;
+  });
+  return siblings.length + 1;
+}
+
+function subjAddL1() {
+  var name = prompt('请输入一级主题名称');
+  if (name == null) return;
+  name = name.trim();
+  if (!name) return;
+  api('/api/subject', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ name: name, parentId: null, layer: 'ALL', sortOrder: subjNextSort(null) })
+  }).then(function(res) {
+    if (res.code !== 0) { alert(res.msg || '创建失败'); return; }
+    subjSelectedL1 = res.data ? res.data.id : subjSelectedL1;
+    loadSubjectDesign(true);
+  });
+}
+
+function subjAddL2() {
+  if (!subjSelectedL1) { alert('请先选择一级主题'); return; }
+  var name = prompt('请输入二级主题名称');
+  if (name == null) return;
+  name = name.trim();
+  if (!name) return;
+  api('/api/subject', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ name: name, parentId: subjSelectedL1, layer: 'ALL', sortOrder: subjNextSort(subjSelectedL1) })
+  }).then(function(res) {
+    if (res.code !== 0) { alert(res.msg || '创建失败'); return; }
+    loadSubjectDesign(true);
+  });
+}
+
+function subjRename(id) {
+  var cur = subjAllData.filter(function(s) { return String(s.id) === String(id); })[0];
+  if (!cur) return;
+  var name = prompt('修改主题名称', cur.name);
+  if (name == null) return;
+  name = name.trim();
+  if (!name || name === cur.name) return;
+  api('/api/subject/' + id, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ name: name, parentId: cur.parentId, layer: cur.layer, sortOrder: cur.sortOrder })
+  }).then(function(res) {
+    if (res.code !== 0) { alert(res.msg || '修改失败'); return; }
+    loadSubjectDesign(true);
+  });
+}
+
+function subjDelete(id) {
+  var cur = subjAllData.filter(function(s) { return String(s.id) === String(id); })[0];
+  if (!cur) return;
+  var isL1 = !cur.parentId;
+  var childCount = isL1 ? subjAllData.filter(function(c) { return String(c.parentId) === String(id); }).length : 0;
+  var msg = isL1
+    ? ('确定删除一级主题「' + cur.name + '」？' + (childCount > 0 ? '其下 ' + childCount + ' 个二级主题也会一并删除。' : ''))
+    : ('确定删除二级主题「' + cur.name + '」？');
+  if (!confirm(msg)) return;
+  api('/api/subject/' + id, { method: 'DELETE' }).then(function(res) {
+    if (res.code !== 0) { alert(res.msg || '删除失败'); return; }
+    if (isL1 && String(subjSelectedL1) === String(id)) subjSelectedL1 = null;
+    loadSubjectDesign(true);
+  });
 }
 
 // ===== 系统配置：数据源管理 =====
@@ -12068,8 +14057,10 @@ function openAiConfig() {
       + '</select></div>'
       + '<div>'
       + '<label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;">API Key</label>'
-      + '<input id="aiCfgKey" class="prop-input" type="password" style="width:100%;" placeholder="sk-ant-..." value="' + (cfg.apiKeyMasked || '') + '">'
-      + '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">密钥加密存储在数据库中，不会明文展示</div></div>'
+      + '<div style="border:1px dashed var(--border);border-radius:var(--radius);padding:8px 12px;font-size:13px;color:var(--text-muted);background:var(--bg-hover);line-height:1.6;">'
+      + '请在 <code style="color:var(--text-regular);">ai-service/.env</code> 中配置<br>'
+      + '<span style="font-size:11px;">设置 <code>QWEN_API_KEY=你的密钥</code> 后重启服务生效；此处不再存储密钥</span>'
+      + '</div></div>'
       + '<div>'
       + '<label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px;">Base URL</label>'
       + '<input id="aiCfgBaseUrl" class="prop-input" style="width:100%;" placeholder="https://api.anthropic.com" value="' + escapeHtml(cfg.baseUrl || '') + '"></div>'
@@ -12110,16 +14101,12 @@ function onAiProviderChange() {
 }
 
 function saveAiConfig() {
-  var key = document.getElementById('aiCfgKey').value;
+  // apiKey 不再由页面提交：统一在 ai-service/.env 中配置
   var payload = {
     provider: document.getElementById('aiCfgProvider').value,
     baseUrl: document.getElementById('aiCfgBaseUrl').value,
     model: document.getElementById('aiCfgModel').value
   };
-  // 只有用户真正输入了新 key 才传（不是 *** 掩码）
-  if (key && key.indexOf('***') === -1) {
-    payload.apiKey = key;
-  }
   apiPost('/api/ai/config', payload).then(function(res) {
     if (res.code === 0) {
       closeModal();
@@ -12135,7 +14122,6 @@ function testAiConfig() {
   status.innerHTML = '<span style="color:var(--text-muted);">测试中...</span>';
   apiPost('/api/ai/test-connection', {
     provider: document.getElementById('aiCfgProvider').value,
-    apiKey: document.getElementById('aiCfgKey').value,
     baseUrl: document.getElementById('aiCfgBaseUrl').value,
     model: document.getElementById('aiCfgModel').value
   }).then(function(res) {

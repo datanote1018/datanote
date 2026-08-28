@@ -117,6 +117,78 @@ cd datanote
 
 ---
 
+## 第三步：配置 AI 服务（可选）
+
+需求分析、AI 问答、知识库这几个功能依赖大模型 API。不用这些功能可以跳过整节。
+
+### 配置 API Key
+
+**API Key 只放在本地 `ai-service/.env`，不进数据库、也不进代码仓库。**
+
+```bash
+cd ai-service
+cp env.example .env          # 从模板复制
+vi .env                       # 填入自己的 Key
+```
+
+`.env` 内容：
+
+```ini
+QWEN_API_KEY=sk-xxxxxxxxxxxxxxxx
+```
+
+Key 在哪申请：<https://bailian.console.aliyun.com/> → API-KEY 管理。
+
+> `.env` 已被 `.gitignore` 排除，不会被误提交。**不要把 Key 写进任何其他文件。**
+
+### 启动
+
+```bash
+cd ai-service
+pip install -r requirements.txt
+./start-ai.sh                 # 启动
+./start-ai.sh stop            # 停止
+```
+
+启动后两个服务：
+
+| 服务 | 端口 | 用途 |
+|------|------|------|
+| 对话 Agent | 8000 | 需求管理页面 |
+| RAG 管理 | 8001 | AI 智能页面 |
+
+没建 `.env` 时脚本会直接报错提示，不会静默失败。
+
+### 模型和地址在哪改
+
+`QWEN_API_KEY` 之外的两项——**模型名**和 **Base URL**——在页面上改：
+「系统管理 → AI 配置」。这两项不是机密，存在数据库里，改完即时生效，不用重启。
+
+优先级：页面上配了就用页面的，没配则用默认值（`qwen-plus` + 百炼兼容端点）。
+
+---
+
+## 关于加密密钥 CRYPTO_KEY
+
+`datanote.conf` 里的 `CRYPTO_KEY` 用于加密**数据源密码**等敏感字段。
+
+**首次部署必须自己生成一把，不要使用固定值：**
+
+```bash
+LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32; echo
+```
+
+把结果填进 `datanote.conf` 的 `CRYPTO_KEY=`。
+
+两个注意事项：
+
+- **`datanote.conf` 不在代码仓库里**（含密钥）。首次部署从模板复制：
+  `cp datanote.conf.example datanote.conf`
+- **换密钥后，之前加密存的数据会解不开**，需要在页面上重新录入数据源密码。
+  所以这把密钥装好就别再改。
+
+---
+
 ## 常见问题
 
 **Q: setup-hive.sh test 失败？**
@@ -133,3 +205,11 @@ cd datanote
 
 **Q: 不需要数据同步功能？**
 DataX 配置可以不填，SQL 开发、调度、数据地图等功能正常使用。
+
+**Q: AI 功能报「缺少 API Key」？**
+检查 `ai-service/.env` 是否存在、`QWEN_API_KEY` 是否填了值。
+模板在 `ai-service/env.example`。
+
+**Q: 页面上改了 AI 配置没生效？**
+模型和 Base URL 改完即时生效。API Key 不在页面上配，它只读 `ai-service/.env`，
+改完需要重启 AI 服务：`cd ai-service && ./start-ai.sh stop && ./start-ai.sh`

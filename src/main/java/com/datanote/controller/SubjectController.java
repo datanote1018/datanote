@@ -88,11 +88,15 @@ public class SubjectController {
     }
 
     /**
-     * 删除主题域
+     * 删除主题域（级联删除其下二级主题）
      */
     @Operation(summary = "删除主题域")
     @DeleteMapping("/{id}")
     public R<String> delete(@PathVariable Long id) {
+        // 先删子节点，避免产生孤儿二级主题
+        QueryWrapper<DnSubject> childQuery = new QueryWrapper<>();
+        childQuery.eq("parent_id", id);
+        subjectMapper.delete(childQuery);
         subjectMapper.deleteById(id);
         return R.ok("删除成功");
     }

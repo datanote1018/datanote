@@ -53,7 +53,9 @@ datanote:
     username: ${DATANOTE_USERNAME:admin}
     password: ${DATANOTE_PASSWORD:}
   ai:
-    api-key: ${CLAUDE_API_KEY:}
+    # API Key 只从环境变量读（由 setup-datanote.sh 从 ai-service/.env 注入），
+    # 不再存数据库、不再加密。与 Python 侧 ai-service 用同一份 .env，避免两处配置不一致。
+    api-key: ${QWEN_API_KEY:${DASHSCOPE_API_KEY:${CLAUDE_API_KEY:}}}
     model: ${CLAUDE_MODEL:claude-sonnet-4-6}
     base-url: ${CLAUDE_BASE_URL:https://api.anthropic.com}
 

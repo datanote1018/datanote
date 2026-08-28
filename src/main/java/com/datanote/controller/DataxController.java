@@ -1,9 +1,11 @@
 package com.datanote.controller;
 
 import com.datanote.mapper.DnDatasourceMapper;
+import com.datanote.mapper.DnSyncTaskMapper;
 import com.datanote.mapper.DnTaskExecutionMapper;
 import com.datanote.model.ColumnInfo;
 import com.datanote.model.DnDatasource;
+import com.datanote.model.DnSyncTask;
 import com.datanote.model.DnTaskExecution;
 import com.datanote.model.R;
 import com.datanote.model.dto.DataxCreateAndSyncRequest;
@@ -38,6 +40,7 @@ public class DataxController {
     private final MetadataService metadataService;
     private final HiveService hiveService;
     private final DnDatasourceMapper datasourceMapper;
+    private final DnSyncTaskMapper syncTaskMapper;
     private final DnTaskExecutionMapper taskExecutionMapper;
 
     @Value("${spring.datasource.url:}")
@@ -50,7 +53,7 @@ public class DataxController {
     private String defaultDbPass;
 
     /**
-     * 生成 DataX JSON 配置
+     * 生成 DataX JSON 配置（纯内存，不写磁盘）
      */
     @Operation(summary = "生成 DataX 任务配置")
     @PostMapping("/generate-job")
@@ -63,12 +66,12 @@ public class DataxController {
 
             List<ColumnInfo> columns = metadataService.getColumns(db, table);
             String odsTable = hiveService.getOdsTableName(db, table, syncMode);
-            String jobPath = dataxService.generateJobJson(
+            String jobJson = dataxService.generateJobJsonString(
                     ds.getHost(), ds.getPort(), ds.getUsername(), ds.getPassword(),
                     db, table, odsTable, columns);
 
             Map<String, String> result = new HashMap<>();
-            result.put("jobPath", jobPath);
+            result.put("jobJson", jobJson);
             result.put("odsTable", odsTable);
             return R.ok(result);
         } catch (Exception e) {
@@ -78,14 +81,19 @@ public class DataxController {
     }
 
     /**
-     * 执行 DataX 同步任务
+     * 执行 DataX 同步任务（从数据库读取 JSON 配置，不依赖磁盘文件）
      */
     @Operation(summary = "执行 DataX 同步任务")
     @PostMapping("/run")
     public R<Map<String, Object>> run(@RequestBody DataxRunRequest body) {
         try {
-            String jobPath = body.getJobPath();
-            ProcessUtil.ExecResult execResult = dataxService.runJob(jobPath);
+            DnSyncTask task = syncTaskMapper.selectById(body.getSyncTaskId());
+            if (task == null) return R.fail("同步任务不存在: " + body.getSyncTaskId());
+            if (task.getDataxJson() == null || task.getDataxJson().isEmpty()) {
+                return R.fail("任务尚未生成 DataX 配置，请先触发一次同步");
+            }
+
+            ProcessUtil.ExecResult execResult = dataxService.runJobInMemory(task.getDataxJson(), task.getTargetTable());
 
             Map<String, Object> data = new HashMap<>();
             data.put("exitCode", execResult.getExitCode());
@@ -134,14 +142,19 @@ public class DataxController {
                     + " ADD IF NOT EXISTS PARTITION (dt='" + today + "')";
             hiveService.executeDDL(addPartitionSql);
 
-            String jobPath = dataxService.generateJobJson(
+            String jobJson = dataxService.generateJobJsonString(
                     ds.getHost(), ds.getPort(), ds.getUsername(), ds.getPassword(),
                     db, table, odsTable, columns);
 
-            ProcessUtil.ExecResult execResult = dataxService.runJob(jobPath);
+            // 如果有关联任务，把生成的配置保存回数据库
+            if (body.getSyncTaskId() != null) {
+                DnSyncTask jsonUpdate = new DnSyncTask();
+                jsonUpdate.setId(body.getSyncTaskId());
+                jsonUpdate.setDataxJson(jobJson);
+                syncTaskMapper.updateById(jsonUpdate);
+            }
 
-            // 执行完成后清理含密码的 JSON 配置文件
-            try { new java.io.File(jobPath).delete(); } catch (Exception ignored) {}
+            ProcessUtil.ExecResult execResult = dataxService.runJobInMemory(jobJson, odsTable);
 
             // 更新执行记录
             if (exec.getId() != null) {
@@ -172,7 +185,8 @@ public class DataxController {
                 exec.setLog(e.getMessage());
                 taskExecutionMapper.updateById(exec);
             }
-            return R.fail("建表同步操作失败");
+            String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            return R.fail("建表同步操作失败: " + errMsg);
         }
     }
 

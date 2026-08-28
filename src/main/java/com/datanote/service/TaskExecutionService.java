@@ -37,9 +37,6 @@ public class TaskExecutionService {
     private final LogBroadcastService logBroadcastService;
     private final TaskSchedulerService taskSchedulerService;
 
-    @Value("${datax.job-dir}")
-    private String jobDir;
-
     // 指数退避参数
     private static final long RETRY_BASE_MS = 5000;    // 5 秒
     private static final long RETRY_MAX_MS = 300000;   // 5 分钟
@@ -230,19 +227,22 @@ public class TaskExecutionService {
 
         logBuilder.append("[DataX] 生成配置...\n");
         List<com.datanote.model.ColumnInfo> columns = metadataService.getColumns(task.getSourceDb(), task.getSourceTable());
-        String jobFile = dataxService.generateJobJson(
+        String jobJson = dataxService.generateJobJsonString(
                 ds.getHost(), ds.getPort(), ds.getUsername(), ds.getPassword(),
                 task.getSourceDb(), task.getSourceTable(), task.getTargetTable(), columns);
-        logBuilder.append("[DataX] 配置生成完成: ").append(jobFile).append("\n");
+
+        // 回写到数据库，便于查看和审计（不含磁盘文件）
+        DnSyncTask jsonUpdate = new DnSyncTask();
+        jsonUpdate.setId(task.getId());
+        jsonUpdate.setDataxJson(jobJson);
+        syncTaskMapper.updateById(jsonUpdate);
+        logBuilder.append("[DataX] 配置已生成并保存\n");
 
         // ========== 第三步：执行 DataX ==========
 
         logBuilder.append("[DataX] 开始同步数据...\n");
-        ProcessUtil.ExecResult result = dataxService.runJob(jobFile);
+        ProcessUtil.ExecResult result = dataxService.runJobInMemory(jobJson, task.getTargetTable());
         logBuilder.append(result.getOutput());
-
-        // 执行完删除含密码的临时文件
-        try { new java.io.File(jobFile).delete(); } catch (Exception ignored) {}
 
         if (result.getExitCode() != 0) {
             throw new RuntimeException("DataX 执行失败，退出码: " + result.getExitCode());
